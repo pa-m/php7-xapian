@@ -1,0 +1,5 @@
+*.so
+*.o
+*.sublime*
+phpcpp
+PHP-CPP
