@@ -125,18 +125,17 @@ OBJECTS             =   $(SOURCES:%.cpp=%.o)
 #   From here the build instructions start
 #
 
-all:                    ${OBJECTS} ${EXTENSION}
 
 ${EXTENSION}:           ${OBJECTS}
 						${LINKER} ${LINKER_FLAGS} -o $@ ${OBJECTS} ${LINKER_DEPENDENCIES}
 
-${OBJECTS}:
+${OBJECTS}:	${SOURCES}
 						${COMPILER} ${COMPILER_FLAGS} $@ ${@:%.o=%.cpp}
 
-install:        
+install:        ${EXTENSION}
 						${CP} ${EXTENSION} ${EXTENSION_DIR}
 						${CP} ${INI} ${INI_DIR}
-						ln -sf ${INI_DIR}/${NAME}.ini /etc/php/7.0/cli/conf.d/20-${NAME}.ini
+						ln -sf ${INI_DIR}${NAME}.ini /etc/php/7.0/cli/conf.d/20-${NAME}.ini
 
 clean:
 						${RM} ${EXTENSION} ${OBJECTS}

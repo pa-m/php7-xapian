@@ -6,7 +6,7 @@
 docker run -it -v ~/projects:/root/projects debian:testing
 
 apt-get update
-apt-get install -y --no-install-recommends php7.0-dev xzdec curl g++ uuid-dev make sudo
+apt-get install -y --no-install-recommends php7.0-dev xzdec curl g++-6 uuid-dev make sudo
 
 cd ~/projects
 curl http://oligarchy.co.uk/xapian/1.4.0/xapian-core-1.4.0.tar.xz|xzdec|tar -xf -
