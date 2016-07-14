@@ -1,16 +1,100 @@
 #include <phpcpp.h>
 #include <xapian.h>
 
-class PhpWritableDatabase: public Php::Base,public Xapian::WritableDatabase {
+class Error: public Php::Base, public Xapian::Error {
 public:
-    PhpWritableDatabase(const Xapian::WritableDatabase& Database):Xapian::WritableDatabase(Database){
-        
-    }
-    virtual ~PhpWritableDatabase()=default;
-
-    Php::Value get_description(Php::Parameters &params){return static_cast<Xapian::WritableDatabase*>(this)->get_description();}
-    void close(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->close();}
+    Error(const Xapian::Error&e):Xapian::Error(e){}
+    virtual ~Error(){}
 };
+
+class Compactor: public Php::Base {
+    std::unique_ptr<Xapian::Compactor> m;
+public:
+    Compactor(){m=std::unique_ptr<Xapian::Compactor>(new Xapian::Compactor());}
+    void add_source(Php::Parameters &params){
+        m->add_source(params[0]);
+    }
+    void set_destdir(Php::Parameters &params){
+        m->set_destdir(params[0]);
+    }
+    void compact(Php::Parameters &params){
+        m->compact();
+    }
+    virtual ~Compactor(){m=NULL;}
+};
+
+
+class TermIterator: public Php::Base, public Xapian::TermIterator {
+public:
+    TermIterator():Xapian::TermIterator(){}
+    TermIterator(const Xapian::TermIterator& i):Xapian::TermIterator(i){}
+    virtual ~TermIterator(){}
+};
+
+class TermGenerator: public Php::Base, public Xapian::TermGenerator {
+public:
+    TermGenerator():Xapian::TermGenerator(){}
+    TermGenerator(const Xapian::TermGenerator& tg):Xapian::TermGenerator(tg){}
+    virtual ~TermGenerator(){}
+};
+
+class Document: public Php::Base, public Xapian::Document {
+public:
+    Document():Xapian::Document(){}
+    Document(const Xapian::Document&d):Xapian::Document(d){}
+    virtual ~Document(){}
+};
+
+class MSet: public Php::Base, public Xapian::MSet {
+public:
+    MSet():Xapian::MSet(){}
+    MSet(const Xapian::MSet &m):Xapian::MSet(m){}
+    virtual ~MSet(){}
+};
+class RSet: public Php::Base, public Xapian::RSet {
+public:
+    RSet():Xapian::RSet(){}
+    RSet(const Xapian::RSet&r):Xapian::RSet(r){}
+    virtual ~RSet(){}
+};
+class ESet: public Php::Base, public Xapian::ESet {
+public:
+    ESet():Xapian::ESet(){}
+    ESet(const Xapian::ESet& e):Xapian::ESet(e){}
+    virtual ~ESet(){}
+};
+
+class Database: public Php::Base, public Xapian::Database {
+public:
+    Database():Xapian::Database(){}
+    Database(const Xapian::Database&d):Xapian::Database(d){}
+    virtual ~Database(){}
+    void close(Php::Parameters &params){ Xapian::Database::close();}
+    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)Xapian::Database::get_doccount();}
+};
+
+class WritableDatabase: public Php::Base, public Xapian::WritableDatabase {
+
+public:
+    WritableDatabase():Xapian::WritableDatabase(){}
+    WritableDatabase(const Xapian::WritableDatabase&d):Xapian::WritableDatabase(d){}
+    virtual ~WritableDatabase(){}
+    Php::Value get_description(Php::Parameters &params){return static_cast<Xapian::WritableDatabase*>(this)->get_description();}
+    void begin_transaction(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->begin_transaction();}
+    void cancel_transaction(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->cancel_transaction();}
+    void commit_transaction(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->commit_transaction();}
+    void commit(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->commit();}
+    void close(Php::Parameters &params){ Xapian::WritableDatabase::close();}
+    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)Xapian::WritableDatabase::get_doccount();}
+
+};
+
+class Enquire: public Php::Base, public Xapian::Enquire {
+public:
+    Enquire(const Xapian::Enquire&e):Xapian::Enquire(e){}
+    virtual ~Enquire(){}
+};
+
 
 class PhpXapian : public Php::Base {
     public:
@@ -24,7 +108,7 @@ class PhpXapian : public Php::Base {
     }
     static Php::Value inmemory_open(Php::Parameters &params){
         Xapian::WritableDatabase db(std::string(),Xapian::DB_BACKEND_INMEMORY);
-        return Php::Object("XapianWritableDatabase",new PhpWritableDatabase(db));
+        return Php::Object("XapianWritableDatabase",new WritableDatabase(db));
     }
 };
 /**
@@ -51,11 +135,51 @@ extern "C" {
         Xapian.method<&PhpXapian::inmemory_open>("inmemory_open");
         extension.add(std::move(Xapian));
 
-        Php::Class<PhpWritableDatabase> WritableDatabase("XapianWritableDatabase");
-        WritableDatabase.method<&PhpWritableDatabase::get_description>("get_description");
-        WritableDatabase.method<&PhpWritableDatabase::close>("close");
-        extension.add(std::move(WritableDatabase));
-        
+        Php::Class<Error> cError("XapianError");
+        //cError.method<&Error::m>("m");
+        extension.add(std::move(cError));
+        Php::Class<Compactor> cCompactor("XapianCompactor");
+        cCompactor.method<&Compactor::add_source>("add_source");
+        cCompactor.method<&Compactor::set_destdir>("set_destdir");
+        cCompactor.method<&Compactor::compact>("compact");
+        extension.add(std::move(cCompactor));
+        Php::Class<TermIterator> cTermIterator("XapianTermIterator");
+        //cTermIterator.method<&TermIterator::m>("m");
+        extension.add(std::move(cTermIterator));
+        Php::Class<TermGenerator> cTermGenerator("XapianTermGenerator");
+        //cTermGenerator.method<&TermGenerator::m>("m");
+        extension.add(std::move(cTermGenerator));
+        Php::Class<Document> cDocument("XapianDocument");
+        //cDocument.method<&Document::m>("m");
+        extension.add(std::move(cDocument));
+        Php::Class<MSet> cMSet("XapianMSet");
+        //cMSet.method<&MSet::m>("m");
+        extension.add(std::move(cMSet));
+        Php::Class<RSet> cRSet("XapianRSet");
+        //cRSet.method<&RSet::m>("m");
+        extension.add(std::move(cRSet));
+        Php::Class<ESet> cESet("XapianESet");
+        //cESet.method<&ESet::m>("m");
+        extension.add(std::move(cESet));
+        Php::Class<Database> cDatabase("XapianDatabase");
+        cDatabase.method<&Database::close>("close");
+        cDatabase.method<&Database::get_doccount>("get_doccount");
+        //cDatabase.method<&Database::m>("m");
+        extension.add(std::move(cDatabase));
+        Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
+        cWritableDatabase.method<&WritableDatabase::get_description>("get_description");
+        cWritableDatabase.method<&WritableDatabase::begin_transaction>("begin_transaction");
+        cWritableDatabase.method<&WritableDatabase::cancel_transaction>("cancel_transaction");
+        cWritableDatabase.method<&WritableDatabase::commit_transaction>("commit_transaction");
+        cWritableDatabase.method<&WritableDatabase::commit>("commit");
+        cWritableDatabase.method<&WritableDatabase::close>("close");
+        cWritableDatabase.method<&WritableDatabase::get_doccount>("get_doccount");
+        cWritableDatabase.extends(cDatabase);
+        extension.add(std::move(cWritableDatabase));
+        Php::Class<Enquire> cEnquire("XapianEnquire");
+        //cEnquire.method<&Enquire::m>("m");
+        extension.add(std::move(cEnquire));
+
 
         // return the extension
         return extension;

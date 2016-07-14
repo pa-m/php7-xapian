@@ -76,8 +76,8 @@ INI                 =   ${NAME}.ini
 #   library file. By default, g++ (the GNU C++ compiler) is used for both.
 #
 
-COMPILER            =   g++
-LINKER              =   g++
+COMPILER            =   g++-6
+LINKER              =   g++-6
 
 #
 #   Compiler and linker flags
