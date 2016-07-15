@@ -21,16 +21,24 @@ function assertEquals($e,$a,$msg){
 class MyMatchSpy extends XapianMatchSpy {
 	var $calls=0;
 	function __construct(){parent::__construct();}
-	function apply($doc,$wt){$this->calls++;}
+	function apply($doc,$wt){
+		assertEquals("XapianDocument", get_class($doc),"check matchspy arg is a doc");
+		$this->calls++;
+	}
 }
 class MyMatchDecider extends XapianMatchDecider {
 	var $calls=0;
 	function __construct(){parent::__construct();}
-	function apply($doc){$this->calls++;return true;}
+	function apply($doc){
+		$this->calls++;
+		assertEquals("XapianDocument", get_class($doc),"check mdecider arg is a doc");
+		return true;
+	}
 }
 
-for($pass=0;$pass<2;++$pass){
-	$db=Xapian::inmemory_open();
+for($pass=0;$pass<10;++$pass){
+	//$db=Xapian::inmemory_open();
+	$db=new XapianWritableDatabase("",Xapian::DB_BACKEND_INMEMORY);
 	echo "pass:$pass\n";
 	assertEquals("XapianWritableDatabase",get_class($db),"check inmemory_open returns a XapianWritableDatabase");
 	assertEquals("WritableDatabase()", $db->get_description(),"check get_description return WritableDatabase()");
@@ -64,14 +72,15 @@ for($pass=0;$pass<2;++$pass){
 	$enquire = new XapianEnquire($db);
 	$enquire->set_query($query);
 	assertEquals($query,$enquire->get_query(),"check enquire set/get query");
-	$enquire->add_matchspy($matchSpy=new MyMatchSpy);
+	$matchSpy=new MyMatchSpy;
+	$enquire->add_matchspy($matchSpy);
 	$mdecider = null;
 	$mdecider = new MyMatchDecider();
 	$mset = $enquire->get_mset(0,1,1,null,$mdecider);
 	assertEquals("XapianMSet",get_class($mset),"check get_mset returns a MSet");
 	assertEquals(1,$mset->size(),"check mset size");
 	assertEquals(1,$matchSpy->calls,"check matchSpy called");
-	assertEquals(1,$mdecider->calls,"check mdecider called");
+	$mdecider && assertEquals(1,$mdecider->calls,"check mdecider called");
 	$mSetEnd = $mset->end();
 	for($it=$mset->begin();!$it->equals($mSetEnd);$it->next()){
 		$doc = $it->get_document();

@@ -328,10 +328,8 @@ public:
     void __construct(Php::Parameters &params){}
     void apply(Php::Parameters &params){}
     virtual void    operator() (const Xapian::Document &doc, double wt){
-        Php::Array applyMethod({this,"apply"});
-        Php::Object argdoc(Document(doc));
-        Php::Value argwt(wt);
-        applyMethod(argdoc,argwt);
+        Php::Array fn({this,"apply"});
+        fn(Php::Object("XapianDocument",new Document(doc)), Php::Value(wt));
     }
     static void get_module_part(Php::Extension& extension){
         Php::Class<MatchSpy> cMatchSpy("XapianMatchSpy");
@@ -361,9 +359,8 @@ public:
     void __construct(Php::Parameters &params){}
     Php::Value apply(Php::Parameters &params){return true;}
     virtual bool    operator() (const Xapian::Document &doc) const{
-        Php::Array apply({this,"apply"});
-        Php::Object argdoc(Document(doc));
-        return apply(argdoc).boolValue();
+        Php::Array fn({this,"apply"});
+        return fn(Php::Object("XapianDocument",new Document(doc))).boolValue();
     }
     virtual ~MatchDecider(){}
     static void get_module_part(Php::Extension& extension){
@@ -376,17 +373,19 @@ public:
 
 
 class Database: public Php::Base, public Xapian::Database {
+    typedef Xapian::Database B;
 public:
-    Database():Xapian::Database(){}
-    Database(const Xapian::Database&d):Xapian::Database(d){}
-    virtual ~Database(){}
-    void close(Php::Parameters &params){ Xapian::Database::close();}
-    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)Xapian::Database::get_doccount();}
+    Database():B(){}
+    Database(const B&d):B(d){}
+    Database(std::string path,int flags):B(path,flags){}
+    void close(Php::Parameters &params){ B::close();}
+    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
     void add_database(Php::Parameters &params){
         Database*db=dynamic_cast<Database*>(params[0].implementation());
-        Xapian::Database::add_database(*db);
+        B::add_database(*db);
     }
-    Php::Value get_description(Php::Parameters &params){return Xapian::Database::get_description();}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    virtual ~Database(){}
     static Php::Class<Database>  get_module_part(Php::Extension& extension){
         Php::Class<Database> cDatabase("XapianDatabase");
         cDatabase.method<&Database::close>("close");
@@ -399,22 +398,39 @@ public:
 };
 
 class WritableDatabase: public Php::Base, public Xapian::WritableDatabase {
-
+    typedef Xapian::WritableDatabase B;
+    std::shared_ptr<B> m;
 public:
-    WritableDatabase():Xapian::WritableDatabase(){}
-    WritableDatabase(const Xapian::WritableDatabase&d):Xapian::WritableDatabase(d){}
+    WritableDatabase():B(){}
+    WritableDatabase(const B&d):B(d){}
+    /*WritableDatabase(std::string path,int flags):B(path,flags){
+        Php::out << "WritableDatabase(std::string path,int flags)\n" << std::flush;
+    }*/
+    void __construct(Php::Parameters& params){
+        if(params.size()>0){
+            if(params[0].isObject()){
+                *this = *dynamic_cast<WritableDatabase*>(params[0].implementation());
+                return;    
+            }
+            std::string path = params[0].stringValue();
+            int action=params.size()>1 ? params[1].numericValue() : 0;
+            //Php::out << "WritableDatabase path=" << path << ", action=" << action << "\n" << std::flush;
+            *this = B(path,action);
+        }
+    }    
     virtual ~WritableDatabase(){}
-    void begin_transaction(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->begin_transaction();}
-    void cancel_transaction(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->cancel_transaction();}
-    void commit_transaction(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->commit_transaction();}
-    void commit(Php::Parameters &params){ static_cast<Xapian::WritableDatabase*>(this)->commit();}
-    void close(Php::Parameters &params){ Xapian::WritableDatabase::close();}
-    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)Xapian::WritableDatabase::get_doccount();}
-    Php::Value get_description(Php::Parameters &params){return Xapian::WritableDatabase::get_description();}
-    void add_document(Php::Parameters &params){Xapian::WritableDatabase::add_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));}
+    void begin_transaction(Php::Parameters &params){ B::begin_transaction();}
+    void cancel_transaction(Php::Parameters &params){ B::cancel_transaction();}
+    void commit_transaction(Php::Parameters &params){ B::commit_transaction();}
+    void commit(Php::Parameters &params){ B::commit();}
+    void close(Php::Parameters &params){ B::close();}
+    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    void add_document(Php::Parameters &params){B::add_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));}
 
     static void get_module_part(Php::Extension& extension,Php::Class<::Database>& cDatabase){
         Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
+        cWritableDatabase.method<&WritableDatabase::__construct>("__construct");
         cWritableDatabase.method<&WritableDatabase::get_description>("get_description");
         cWritableDatabase.method<&WritableDatabase::begin_transaction>("begin_transaction");
         cWritableDatabase.method<&WritableDatabase::cancel_transaction>("cancel_transaction");
@@ -544,6 +560,30 @@ class PhpXapian : public Php::Base {
         Php::Class<PhpXapian> Xapian("Xapian");
         Xapian.method<&PhpXapian::version_string>("version_string");
         Xapian.method<&PhpXapian::inmemory_open>("inmemory_open");
+        Xapian.constant("DB_CREATE_OR_OPEN", (int32_t)0x00);//    Create database if it doesn't already exist. 
+        Xapian.constant("DB_CREATE_OR_OVERWRITE", (int32_t)0x01);//    Create database if it doesn't already exist, or overwrite if it does. 
+        Xapian.constant("DB_CREATE", (int32_t)0x02);//    Create a new database. 
+        Xapian.constant("DB_OPEN", (int32_t)0x03);//    Open an existing database. 
+        Xapian.constant("DB_NO_SYNC", (int32_t)0x04);//    Don't attempt to ensure changes have hit disk. 
+        Xapian.constant("DB_FULL_SYNC", (int32_t)0x08);//    Try to ensure changes are really written to disk. 
+        Xapian.constant("DB_DANGEROUS", (int32_t)0x10);//    Update the database in-place. 
+        Xapian.constant("DB_NO_TERMLIST", (int32_t)0x20);//    When creating a database, don't create a termlist table. 
+        Xapian.constant("DB_RETRY_LOCK", (int32_t)0x40);//    If the database is already locked, retry the lock. 
+        Xapian.constant("DB_BACKEND_GLASS", (int32_t)0x100);//    Use the glass backend. 
+        Xapian.constant("DB_BACKEND_CHERT", (int32_t)0x200);//    Use the chert backend. 
+        Xapian.constant("DB_BACKEND_STUB", (int32_t)0x300);//    Open a stub database file. 
+        Xapian.constant("DB_BACKEND_INMEMORY", (int32_t)0x400);//    Use the "in memory" backend. 
+        Xapian.constant("DBCHECK_SHORT_TREE", (int32_t)1);//    Show a short-format display of the B-tree contents. 
+        Xapian.constant("DBCHECK_FULL_TREE", (int32_t)2);//    Show a full display of the B-tree contents. 
+        Xapian.constant("DBCHECK_SHOW_FREELIST", (int32_t)4);//    Show the bitmap for the B-tree. 
+        Xapian.constant("DBCHECK_SHOW_STATS", (int32_t)8);//    Show statistics for the B-tree. 
+        Xapian.constant("DBCHECK_FIX", (int32_t)16);//    Fix problems. 
+        Xapian.constant("DBCOMPACT_NO_RENUMBER", (int32_t)4);//    Use the same document ids in the output as in the input(s). 
+        Xapian.constant("DBCOMPACT_MULTIPASS", (int32_t)8);//    If merging more than 3 databases, merge the postlists in multiple passes. 
+        Xapian.constant("DBCOMPACT_SINGLE_FILE", (int32_t)16);//    Produce a single-file database. 
+        Xapian.constant("BAD_VALUENO", (int32_t)0xffffffff);//    Reserved value to indicate "no valueno". 
+
+
         extension.add(std::move(Xapian));
 
     }
