@@ -14,9 +14,9 @@ public:
 };
 
 class Compactor: public Php::Base {
-    std::unique_ptr<Xapian::Compactor> m;
+    std::shared_ptr<Xapian::Compactor> m;
 public:
-    Compactor(){m=std::unique_ptr<Xapian::Compactor>(new Xapian::Compactor());}
+    Compactor(){m.reset(new Xapian::Compactor());}
     void add_source(Php::Parameters &params){
         //deprecated Use Database::compact(destdir[, compactor]) instead.
         m->add_source(params[0]);
@@ -41,24 +41,45 @@ public:
 
 
 class TermIterator: public Php::Base, public Xapian::TermIterator {
+    typedef Xapian::TermIterator B;
 public:
     TermIterator():Xapian::TermIterator(){}
     TermIterator(const Xapian::TermIterator& i):Xapian::TermIterator(i){}
     Php::Value get_description(Php::Parameters &params){return Xapian::TermIterator::get_description();}
+    Php::Value get_term(Php::Parameters &params){return *(*static_cast<Xapian::TermIterator*>(this));}
+    void next(Php::Parameters& params){(*static_cast<Xapian::TermIterator*>(this))++;}
+    Php::Value equals(Php::Parameters& params){
+        TermIterator *other=dynamic_cast<TermIterator*>(params[0].implementation());
+        return static_cast<Xapian::TermIterator*>(this)==static_cast<Xapian::TermIterator*>(other);
+    }
+    Php::Value get_termfreq(Php::Parameters& params){return (int32_t)B::get_termfreq();}
+    Php::Value get_wdf(Php::Parameters& params){return (int32_t)B::get_wdf();}
+
     virtual ~TermIterator(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<TermIterator> cTermIterator("XapianTermIterator");
         cTermIterator.method<&TermIterator::get_description>("get_description",{});
+        cTermIterator.method<&TermIterator::get_term>("get_term",{});
+        cTermIterator.method<&TermIterator::next>("next",{});
+        cTermIterator.method<&TermIterator::equals>("equals",{});
+        cTermIterator.method<&TermIterator::get_termfreq>("get_termfreq",{});
+        cTermIterator.method<&TermIterator::get_wdf>("get_wdf",{});
         extension.add(std::move(cTermIterator));
     }
 };
-class Stem: public Php::Base, public Xapian::Stem {
+class Stem: public Php::Base {
+    Xapian::Stem m;
 public:
-    Stem(std::string lang):Xapian::Stem(lang){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::Stem::get_description();}
+    Xapian::Stem get_xapian_stem(){return m;}
+    Stem(){}
+    void __construct(Php::Parameters& params){
+        if(params.size()>0) m=Xapian::Stem(params[0].stringValue());
+    }
+    Php::Value get_description(Php::Parameters &params){return m.get_description();}
     virtual ~Stem(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Stem> cStem("XapianStem");
+        cStem.method<&Stem::__construct>("__construct",{});
         cStem.method<&Stem::get_description>("get_description",{});
         //cStem.method<&Stem::m>("m");
         extension.add(std::move(cStem));
@@ -110,7 +131,8 @@ public:
     TermGenerator(const Xapian::TermGenerator& tg):Xapian::TermGenerator(tg){}
     Php::Value get_description(Php::Parameters &params){return Xapian::TermGenerator::get_description();}
     void set_stemmer(Php::Parameters &params) {
-        B::set_stemmer(*dynamic_cast<Xapian::Stem*>(params[0].implementation()));
+
+        Xapian::TermGenerator::set_stemmer(dynamic_cast<Stem*>(params[0].implementation())->get_xapian_stem());
     }
     void set_stopper(Php::Parameters &params) {
         B::set_stopper(dynamic_cast<Xapian::Stopper*>(params[0].implementation()));
@@ -122,18 +144,18 @@ public:
         B::set_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));
     }
     void index_text(Php::Parameters& params) {
-        Xapian::termcount wdfinc=params.size()>=1 ? params[1].numericValue() : 1;
-        std::string prefix = params.size()>=2 ? params[2].stringValue() : "";
+        Xapian::termcount wdfinc=params.size()>1 ? params[1].numericValue() : 1;
+        std::string prefix = params.size()>2 ? params[2].stringValue() : "";
         B::index_text(params[0].stringValue(),wdfinc,prefix);
     }
     virtual ~TermGenerator(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<TermGenerator> cTermGenerator("XapianTermGenerator");
         cTermGenerator.method<&TermGenerator::get_description>("get_description",{});
-        cTermGenerator.method<&TermGenerator::set_stemmer>("set_stemmer");
-        cTermGenerator.method<&TermGenerator::set_stopper>("set_stopper");
-        cTermGenerator.method<&TermGenerator::set_database>("set_database");
-        cTermGenerator.method<&TermGenerator::set_document>("set_document");
+        cTermGenerator.method<&TermGenerator::set_stemmer>("set_stemmer",{Php::ByVal("stem","XapianStem")});
+        cTermGenerator.method<&TermGenerator::set_stopper>("set_stopper",{Php::ByVal("stopper",Php::Type::Object)});
+        cTermGenerator.method<&TermGenerator::set_database>("set_database",{Php::ByVal("database","XapianWritableDatabase")});
+        cTermGenerator.method<&TermGenerator::set_document>("set_document",{Php::ByVal("document","XapianDocument")});
         cTermGenerator.method<&TermGenerator::index_text>("index_text");
         extension.add(std::move(cTermGenerator));
     }
@@ -145,6 +167,18 @@ public:
     Document():Xapian::Document(){}
     Document(const Xapian::Document&d):Xapian::Document(d){}
     Php::Value get_description(Php::Parameters &params){return Xapian::Document::get_description();}
+    void add_value(Php::Parameters &params){
+        B::add_value(params[0].numericValue(),params[1].stringValue());
+    }
+    Php::Value get_value(Php::Parameters& params) {
+        return Php::Value(B::get_value(params[0].numericValue()));
+    }
+    void remove_value(Php::Parameters& params) {
+        B::remove_value(params[0].numericValue());
+    }
+    void clear_values(Php::Parameters& params){
+        B::clear_values();
+    }
     void set_data(Php::Parameters &params){B::set_data(params[0]);}
     Php::Value get_data(Php::Parameters &params){return B::get_data();}
 
@@ -152,10 +186,43 @@ public:
     static void get_module_part(Php::Extension& extension){
         Php::Class<Document> cDocument("XapianDocument");
         cDocument.method<&Document::get_description>("get_description",{});
-        cDocument.method<&Document::set_data>("set_data",{});
+        cDocument.method<&Document::add_value>("add_value",{Php::ByVal("slot",Php::Type::Numeric),Php::ByVal("value",Php::Type::String)});
+        cDocument.method<&Document::get_value>("get_value",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDocument.method<&Document::remove_value>("remove_value",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDocument.method<&Document::clear_values>("clear_values",{});
+
+        cDocument.method<&Document::set_data>("set_data",{Php::ByVal("data",Php::Type::String)});
         cDocument.method<&Document::get_data>("get_data",{});
         //cDocument.method<&Document::m>("m");
         extension.add(std::move(cDocument));
+    }
+};
+
+
+class MSetIterator: public Php::Base, public Xapian::MSetIterator {
+    typedef Xapian::MSetIterator B;
+public:
+    MSetIterator():Xapian::MSetIterator(){}
+    MSetIterator(const Xapian::MSetIterator &m):Xapian::MSetIterator(m){}
+    Php::Value get_description(Php::Parameters &params){return Xapian::MSetIterator::get_description();}
+    Php::Value equals(Php::Parameters& params){
+        MSetIterator*other=dynamic_cast<MSetIterator*>(params[0].implementation());
+        return *static_cast<Xapian::MSetIterator*>(this)==*static_cast<Xapian::MSetIterator*>(other);
+    }
+    void next(Php::Parameters& params){(*static_cast<Xapian::MSetIterator*>(this))++;}
+    Php::Value get_docid(Php::Parameters& params){return (int32_t)*(*(B*)this);}
+    Php::Value get_document(Php::Parameters& params){return Php::Object("XapianDocument",new Document(B::get_document()));}
+    Php::Value get_weight(Php::Parameters& params){return (double)B::get_weight();}
+    virtual ~MSetIterator(){}
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<MSetIterator> cMSetIterator("XapianMSetIterator");
+        cMSetIterator.method<&MSetIterator::get_description>("get_description",{});
+        cMSetIterator.method<&MSetIterator::equals>("equals",{Php::ByVal("other","XapianMSetIterator")});
+        cMSetIterator.method<&MSetIterator::next>("next",{});
+        cMSetIterator.method<&MSetIterator::get_docid>("get_docid",{});
+        cMSetIterator.method<&MSetIterator::get_document>("get_document",{});
+        cMSetIterator.method<&MSetIterator::get_weight>("get_weight",{});
+        extension.add(std::move(cMSetIterator));
     }
 };
 
@@ -164,14 +231,21 @@ public:
     MSet():Xapian::MSet(){}
     MSet(const Xapian::MSet &m):Xapian::MSet(m){}
     Php::Value get_description(Php::Parameters &params){return Xapian::MSet::get_description();}
+    Php::Value size(Php::Parameters &params){return Php::Value((int32_t)Xapian::MSet::size());}
+    Php::Value begin(Php::Parameters &params){return Php::Object("XapianMSetIterator",new MSetIterator(Xapian::MSet::begin()));}
+    Php::Value end(Php::Parameters &params){return Php::Object("XapianMSetIterator",new MSetIterator(Xapian::MSet::end()));}
     virtual ~MSet(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<MSet> cMSet("XapianMSet");
         cMSet.method<&MSet::get_description>("get_description",{});
-        //cMSet.method<&MSet::m>("m");
+        cMSet.method<&MSet::size>("size");
+        cMSet.method<&MSet::begin>("begin");
+        cMSet.method<&MSet::end>("end");
         extension.add(std::move(cMSet));
     }
 };
+
+
 class RSet: public Php::Base, public Xapian::RSet {
 public:
     RSet():Xapian::RSet(){}
@@ -198,15 +272,28 @@ public:
     }
 };
 
+class Parameters:public Php::Parameters {
+public:
+    Parameters(Php::Base*object):Php::Parameters(object){}
+};
+
 class MatchSpy: public Php::Base, public Xapian::MatchSpy {
 public:
     MatchSpy():Xapian::MatchSpy(){}
     //MatchSpy(const Xapian::MatchSpy& e):Xapian::MatchSpy(e){}
     Php::Value get_description(Php::Parameters &params){return Xapian::MatchSpy::get_description();}
     virtual ~MatchSpy(){}
+    void __construct(Php::Parameters &params){}
+    void apply(Php::Parameters &params){}
+    virtual void    operator() (const Xapian::Document &doc, double wt){
+        Php::Array apply({this,"apply"});
+        apply(Php::Object("XapianDocument",new Document(doc)),Php::Value(wt));
+    }
     static void get_module_part(Php::Extension& extension){
         Php::Class<MatchSpy> cMatchSpy("XapianMatchSpy");
+        cMatchSpy.method<&MatchSpy::__construct>("__construct",{});
         cMatchSpy.method<&MatchSpy::get_description>("get_description",{});
+        cMatchSpy.method<&MatchSpy::apply>("apply",{Php::ByVal("doc"),Php::ByVal("wt")});
         extension.add(std::move(cMatchSpy));
     }
 };
@@ -227,12 +314,17 @@ public:
 class MatchDecider: public Php::Base, public Xapian::MatchDecider {
 public:
     MatchDecider():Xapian::MatchDecider(){}
-    //MatchDecider(const Xapian::MatchDecider& e):Xapian::MatchDecider(e){}
-    //Php::Value get_description(Php::Parameters &params){return Xapian::MatchDecider::get_description();}
+    void __construct(Php::Parameters &params){}
+    Php::Value apply(Php::Parameters &params){return true;}
+    virtual bool    operator() (const Xapian::Document &doc) const{
+        Php::Array apply({this,"apply"});
+        return apply(Php::Object("XapianDocument",new Document(doc))).boolValue();
+   }
     virtual ~MatchDecider(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<MatchDecider> cMatchDecider("XapianMatchDecider");
-        //cMatchDecider.method<&MatchDecider::get_description>("get_description",{});
+        cMatchDecider.method<&MatchDecider::__construct>("__construct");
+        cMatchDecider.method<&MatchDecider::apply>("apply",{Php::ByVal("doc")});
         extension.add(std::move(cMatchDecider));
     }
 };
@@ -299,48 +391,91 @@ public:
     Php::Value get_description(Php::Parameters &params){return Xapian::Query::get_description();}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Query> cQuery("XapianQuery");
-        //cQuery.method<&Query::m>("m");
+        cQuery.method<&Query::get_description>("get_description");
         extension.add(std::move(cQuery));
     }
 };
 
 class QueryParser: public Php::Base, public Xapian::QueryParser {
+    typedef Xapian::QueryParser B;
 public:
+    QueryParser():Xapian::QueryParser(){}
     QueryParser(const Xapian::QueryParser&e):Xapian::QueryParser(e){}
-    virtual ~QueryParser(){}
     Php::Value get_description(Php::Parameters &params){return Xapian::QueryParser::get_description();}
+    Php::Value parse_query(Php::Parameters& params){
+        unsigned flags = params.size()>1 ? params[1].numericValue() : B::FLAG_DEFAULT;
+        std::string prefix = params.size()>2 ? params[2].stringValue() : "";
+        Query q=B::parse_query(params[0].stringValue(), flags, prefix);
+        return Php::Object("XapianQuery", new Query(q));
+    }
+    Php::Value get_corrected_query_string(Php::Parameters& params){
+        return B::get_corrected_query_string();
+    }
+    virtual ~QueryParser(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<QueryParser> cQueryParser("XapianQueryParser");
-        //cQueryParser.method<&QueryParser::m>("m");
+        cQueryParser.method<&QueryParser::parse_query>("parse_query");
+        cQueryParser.method<&QueryParser::get_corrected_query_string>("get_corrected_query_string");
         extension.add(std::move(cQueryParser));
     }
 };
 
-class Enquire: public Php::Base, public Xapian::Enquire {
+class Enquire: public Php::Base {
+protected:
     typedef Xapian::Enquire B;
+    std::shared_ptr<Xapian::Enquire> m;
 public:
-    Enquire(const Xapian::Enquire&e):Xapian::Enquire(e){}
+    //Enquire(Database*db){m.reset(new Xapian::Enquire(*db));}
+    Enquire(){}
+    void __construct(Php::Parameters& params){
+        if(params.size()<1) throw Php::Exception("Enquire ctor requires 1 arg");
+        Enquire *enq = dynamic_cast<Enquire*>(params[0].implementation());
+        if(enq) {
+            m.reset(new Xapian::Enquire(*(enq->m)));
+            return;
+        }
+        Database *db = dynamic_cast<Database*>(params[0].implementation());
+        if(db) {
+            m.reset(new Xapian::Enquire(*db));
+            return;
+        }
+        WritableDatabase *wdb = dynamic_cast<WritableDatabase*>(params[0].implementation());
+        if(wdb) {
+            m.reset(new Xapian::Enquire(*wdb));
+            return;
+        }
+        throw Php::Exception("Enquire ctor invalid arg");
+    }
+
     virtual ~Enquire(){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::Enquire::get_description();}
-    void set_query(Php::Parameters& params){B::set_query(*dynamic_cast<Xapian::Query*>(params[0].implementation()));}
+    Php::Value get_description(Php::Parameters &params){return m ? m->get_description():"null";}
+    void set_query(Php::Parameters& params){m->set_query(*dynamic_cast<Xapian::Query*>(params[0].implementation()));}
     Php::Value get_query(Php::Parameters& params){
-        Query q=B::get_query();
-        return Php::Object("XapianQuery",&q);
+        Xapian::Query xq = m->get_query();
+        return Php::Object("XapianQuery",new Query(xq));
     }
     Php::Value get_mset(Php::Parameters& params){
+        if(params.size()<3) throw new Php::Exception("get_mset must have 3-5 args");
+        //Php::out << "get_mset\n"<<std::flush;
         Xapian::doccount first=params[0].numericValue();
         Xapian::doccount maxitems=params[1].numericValue();
         Xapian::doccount checkatleast=params[2].numericValue();
-        RSet* omrset = params.size()>=3 ? dynamic_cast<RSet*>(params[3].implementation()) : NULL;
-        MatchDecider* mdecider = params.size()>=4 ? dynamic_cast<MatchDecider*>(params[4].implementation()) : NULL;
-        MSet mset=B::get_mset(first,maxitems,checkatleast,omrset,mdecider);
-        return Php::Object("XapianMSet",&mset);
+        RSet* omrset = params.size()>3 ? dynamic_cast<RSet*>(params[3].implementation()) : NULL;
+        MatchDecider* mdecider = params.size()>4 ? dynamic_cast<MatchDecider*>(params[4].implementation()) : NULL;
+        Xapian::MSet mset=m->get_mset(first,maxitems,checkatleast,omrset,mdecider);
+        //Php::out <<"mset size:"<<(((Xapian::MSet)mset).size())<<std::endl<<std::flush;
+        return Php::Object("XapianMSet",new MSet(mset));
     }
+    void add_matchspy(Php::Parameters& params){m->add_matchspy(dynamic_cast<MatchSpy*>(params[0].implementation()));}
+    void clear_matchspies(Php::Parameters& params){m->clear_matchspies();}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Enquire> cEnquire("XapianEnquire");
+        cEnquire.method<&Enquire::__construct>("__construct");
         cEnquire.method<&Enquire::set_query>("set_query");
         cEnquire.method<&Enquire::get_query>("get_query");
         cEnquire.method<&Enquire::get_mset>("get_mset");
+        cEnquire.method<&Enquire::add_matchspy>("add_matchspy");
+        cEnquire.method<&Enquire::clear_matchspies>("clear_matchspies");
         extension.add(std::move(cEnquire));
     }
 };
@@ -397,6 +532,7 @@ extern "C" {
         TermGenerator::get_module_part(extension);
         Document::get_module_part(extension);
         MSet::get_module_part(extension);
+        MSetIterator::get_module_part(extension);
         RSet::get_module_part(extension);
         ESet::get_module_part(extension);
         MatchSpy::get_module_part(extension);
