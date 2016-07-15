@@ -91,5 +91,6 @@ for($pass=0;$pass<2;++$pass){
 		assertEquals("0:value for slot 0",join(", ",$values),"check found-doc values");
 	}
 	echo "ok\n";
-$db->close();usleep(100000);} exit(0);
+	$db->close();
+} 
 
