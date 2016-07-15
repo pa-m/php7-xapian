@@ -65,6 +65,7 @@ for($pass=0;$pass<2;++$pass){
 	$enquire->set_query($query);
 	assertEquals($query,$enquire->get_query(),"check enquire set/get query");
 	$enquire->add_matchspy($matchSpy=new MyMatchSpy);
+	$mdecider = null;
 	$mdecider = new MyMatchDecider();
 	$mset = $enquire->get_mset(0,1,1,null,$mdecider);
 	assertEquals("XapianMSet",get_class($mset),"check get_mset returns a MSet");
@@ -74,7 +75,20 @@ for($pass=0;$pass<2;++$pass){
 	$mSetEnd = $mset->end();
 	for($it=$mset->begin();!$it->equals($mSetEnd);$it->next()){
 		$doc = $it->get_document();
-		assertEquals("value for slot 0",$doc->get_value(0),"check document  value");
+		assertEquals("value for slot 0",$doc->get_value(0),"check found-document  value");
+		$terms=[];
+		$b=$doc->termlist_begin();
+		$e=$doc->termlist_end();
+		assertEquals("XapianTermIterator",get_class($b),"check term iterator type");
+		assertEquals("XapianTermIterator",get_class($e),"check term iterator type");
+		//echo("term:".$i->get_term())."\n";
+		for($i=$b;!$i->equals($e);$i->next()) $terms[]=$i->get_term();
+		assertEquals("Zsom, Ztext, some, text",join(", ",$terms),"check found-doc terms");
+		$values=[];
+		$b=$doc->values_begin();
+		$e=$doc->values_end();
+		for($i=$b;!$i->equals($e);$i->next()) $values[]=$i->get_valueno().":".$i->get_value();
+		assertEquals("0:value for slot 0",join(", ",$values),"check found-doc values");
 	}
 	echo "ok\n";
 $db->close();usleep(100000);} exit(0);
