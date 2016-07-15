@@ -67,6 +67,32 @@ public:
         extension.add(std::move(cTermIterator));
     }
 };
+
+class ValueIterator: public Php::Base, public Xapian::ValueIterator {
+    typedef Xapian::ValueIterator B;
+public:
+    ValueIterator():Xapian::ValueIterator(){}
+    ValueIterator(const Xapian::ValueIterator& i):Xapian::ValueIterator(i){}
+    Php::Value get_description(Php::Parameters &params){return Xapian::ValueIterator::get_description();}
+    Php::Value get_value(Php::Parameters &params){return *(*static_cast<Xapian::ValueIterator*>(this));}
+    void next(Php::Parameters& params){(*static_cast<Xapian::ValueIterator*>(this))++;}
+    Php::Value equals(Php::Parameters& params){
+        ValueIterator *other=dynamic_cast<ValueIterator*>(params[0].implementation());
+        return static_cast<Xapian::ValueIterator*>(this)==static_cast<Xapian::ValueIterator*>(other);
+    }
+    Php::Value get_valueno(Php::Parameters& params){return (int32_t)B::get_valueno();}
+
+    virtual ~ValueIterator(){}
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<ValueIterator> cValueIterator("XapianValueIterator");
+        cValueIterator.method<&ValueIterator::get_description>("get_description",{});
+        cValueIterator.method<&ValueIterator::get_value>("get_term",{});
+        cValueIterator.method<&ValueIterator::next>("next",{});
+        cValueIterator.method<&ValueIterator::equals>("equals",{});
+        cValueIterator.method<&ValueIterator::get_valueno>("get_valueno",{});
+        extension.add(std::move(cValueIterator));
+    }
+};
 class Stem: public Php::Base {
     Xapian::Stem m;
 public:
@@ -526,6 +552,7 @@ extern "C" {
         Error::get_module_part(extension);
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
+        ValueIterator::get_module_part(extension);
         Stem::get_module_part(extension);
         Php::Class<Stopper> cStopper = Stopper::get_module_part(extension);
         SimpleStopper::get_module_part(extension, cStopper);
