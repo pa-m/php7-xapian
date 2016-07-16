@@ -298,18 +298,52 @@ public:
         extension.add(std::move(cRSet));
     }
 };
+
+class ESetIterator: public Php::Base, public Xapian::ESetIterator {
+    typedef Xapian::ESetIterator B;
+public:
+    ESetIterator():Xapian::ESetIterator(){}
+    ESetIterator(const Xapian::ESetIterator& e):Xapian::ESetIterator(e){}
+    Php::Value get_description(Php::Parameters &params){return Xapian::ESetIterator::get_description();}
+    Php::Value get_weight(Php::Parameters &params){return Xapian::ESetIterator::get_weight();}
+    Php::Value get_term(Php::Parameters &params){return **this;}
+    Php::Value equals(Php::Parameters &params){
+        return *(B*)this==*(B*)dynamic_cast<ESetIterator*>(params[0].implementation());
+    }
+    void next(Php::Parameters& params){(*this)++;}
+    virtual ~ESetIterator(){}
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<ESetIterator> cESetIterator("XapianESetIterator");
+        cESetIterator.method<&ESetIterator::get_description>("get_description",{});
+        cESetIterator.method<&ESetIterator::get_weight>("get_weight",{});
+        cESetIterator.method<&ESetIterator::get_term>("get_term",{});
+        cESetIterator.method<&ESetIterator::equals>("equals",{});
+        cESetIterator.method<&ESetIterator::next>("next",{});
+        extension.add(std::move(cESetIterator));
+    }
+};
+
 class ESet: public Php::Base, public Xapian::ESet {
 public:
     ESet():Xapian::ESet(){}
     ESet(const Xapian::ESet& e):Xapian::ESet(e){}
+    Php::Value size(Php::Parameters &params){return (int32_t)Xapian::ESet::size();}
     Php::Value get_description(Php::Parameters &params){return Xapian::ESet::get_description();}
+    Php::Value begin(Php::Parameters &params){return Php::Object("XapianESetIterator",new ESetIterator(Xapian::ESet::begin()));}
+    Php::Value end(Php::Parameters &params){return Php::Object("XapianESetIterator",new ESetIterator(Xapian::ESet::end()));}
+
     virtual ~ESet(){}
+
     static void get_module_part(Php::Extension& extension){
         Php::Class<ESet> cESet("XapianESet");
         cESet.method<&ESet::get_description>("get_description",{});
+        cESet.method<&ESet::size>("size",{});
+        cESet.method<&ESet::begin>("begin",{});
+        cESet.method<&ESet::end>("end",{});
         extension.add(std::move(cESet));
     }
 };
+
 
 class Parameters:public Php::Parameters {
 public:
@@ -551,11 +585,49 @@ public:
     Php::Value get_corrected_query_string(Php::Parameters& params){
         return B::get_corrected_query_string();
     }
+    void set_stemming_strategy(Php::Parameters& params){
+        B::set_stemming_strategy((B::stem_strategy)params[0].numericValue());
+    }
+    void set_stemmer(Php::Parameters& params){B::set_stemmer(dynamic_cast<Stem*>(params[0].implementation())->get_xapian_stem());}
+    void set_stopper(Php::Parameters& params){
+        Stopper *sto0 = dynamic_cast<Stopper*>(params[0].implementation());
+        if(sto0){
+            B::set_stopper((Xapian::Stopper*)sto0);
+            return;
+        }
+        SimpleStopper* sto1 = dynamic_cast<SimpleStopper*>(params[0].implementation());
+        if(sto1){
+            B::set_stopper((Xapian::Stopper*)sto1);
+            return;
+        }
+        throw Php::Exception("set_stopper: invalid arg");
+    }
     virtual ~QueryParser(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<QueryParser> cQueryParser("XapianQueryParser");
+        cQueryParser.constant("FLAG_BOOLEAN",(int32_t)1);
+        cQueryParser.constant("FLAG_PHRASE",(int32_t)2);
+        cQueryParser.constant("FLAG_LOVEHATE",(int32_t)4);
+        cQueryParser.constant("FLAG_BOOLEAN_ANY_CASE",(int32_t)8);
+        cQueryParser.constant("FLAG_WILDCARD",(int32_t)16);
+        cQueryParser.constant("FLAG_PURE_NOT",(int32_t)32);
+        cQueryParser.constant("FLAG_PARTIAL",(int32_t)64);
+        cQueryParser.constant("FLAG_SPELLING_CORRECTION",(int32_t)128);
+        cQueryParser.constant("FLAG_SYNONYM",(int32_t)256);
+        cQueryParser.constant("FLAG_AUTO_SYNONYMS",(int32_t)512);
+        cQueryParser.constant("FLAG_AUTO_MULTIWORD_SYNONYMS",(int32_t)1024);
+        cQueryParser.constant("FLAG_CJK_NGRAM",(int32_t)2048);
+        cQueryParser.constant("FLAG_DEFAULT",(int32_t)B::FLAG_PHRASE|B::FLAG_BOOLEAN|B::FLAG_LOVEHATE);
+        cQueryParser.constant("STEM_NONE",(int32_t)B::STEM_NONE);
+        cQueryParser.constant("STEM_SOME",(int32_t)B::STEM_SOME);
+        cQueryParser.constant("STEM_ALL",(int32_t)B::STEM_ALL);
+        cQueryParser.constant("STEM_ALL_Z",(int32_t)B::STEM_ALL_Z);
+
         cQueryParser.method<&QueryParser::parse_query>("parse_query");
-        cQueryParser.method<&QueryParser::get_corrected_query_string>("get_corrected_query_string");
+        cQueryParser.method<&QueryParser::get_corrected_query_string>("get_corrected_query_string",{});
+        cQueryParser.method<&QueryParser::set_stemming_strategy>("set_stemming_strategy",{Php::ByVal("stem_strategy",Php::Type::Numeric)});
+        cQueryParser.method<&QueryParser::set_stemmer>("set_stemmer",{Php::ByVal("stemmer",Php::Type::Object)});
+        cQueryParser.method<&QueryParser::set_stopper>("set_stopper",{Php::ByVal("stopper",Php::Type::Object)});
         extension.add(std::move(cQueryParser));
     }
 };
@@ -625,6 +697,22 @@ public:
     void set_collapse_key(Php::Parameters& params){m->set_collapse_key(params[0].numericValue(),params[1].numericValue());}
     void set_cutoff(Php::Parameters& params){m->set_cutoff(params[0].numericValue(),params[1].floatValue());}
     void clear_matchspies(Php::Parameters& params){m->clear_matchspies();}
+    Php::Value get_eset(Php::Parameters& params){
+/*    ESet    get_eset (Xapian::termcount maxitems, const RSet &omrset, int flags=0, const Xapian::ExpandDecider *edecider=0, double min_wt=0.0) const
+    Get the expand set for the given rset. 
+ESet    get_eset (Xapian::termcount maxitems, const RSet &omrset, const Xapian::ExpandDecider *edecider) const
+    Get the expand set for the given rset. 
+ESet    get_eset (Xapian::termcount maxitems, const RSet &rset, int flags, double k, const Xapian::ExpandDecider *edecider=NULL, double min_wt=0.0) const
+*/
+        Xapian::termcount maxitems=params[0].numericValue();
+        RSet*omrset = dynamic_cast<RSet*>(params[1].implementation());
+        if(!omrset) throw Php::Exception("get_eset:invalid arg");
+         int flags = params.size()>2 ? params[2].numericValue() : 0;
+         Xapian::ExpandDecider *edecider=NULL;
+            double min_wt=0.;
+        return Php::Object("XapianESet",new ESet(m->get_eset(maxitems,*(Xapian::RSet*)omrset,flags,edecider,min_wt)));
+    }
+
     static void get_module_part(Php::Extension& extension){
         Php::Class<Enquire> cEnquire("XapianEnquire");
         cEnquire.constant("ASCENDING",(int32_t)B::ASCENDING);
@@ -634,6 +722,7 @@ public:
         cEnquire.method<&Enquire::set_query>("set_query",{Php::ByVal("query","XapianQuery")});
         cEnquire.method<&Enquire::get_query>("get_query",{});
         cEnquire.method<&Enquire::get_mset>("get_mset");
+        cEnquire.method<&Enquire::get_eset>("get_eset");
         cEnquire.method<&Enquire::add_matchspy>("add_matchspy",{Php::ByVal("matchspy",Php::Type::Object)});
         cEnquire.method<&Enquire::clear_matchspies>("clear_matchspies",{});
         cEnquire.method<&Enquire::set_sort_by_relevance>("set_sort_by_relevance",{});
@@ -726,6 +815,7 @@ extern "C" {
         MSet::get_module_part(extension);
         MSetIterator::get_module_part(extension);
         RSet::get_module_part(extension);
+        ESetIterator::get_module_part(extension);
         ESet::get_module_part(extension);
         Php::Class<MatchSpy> cMatchSpy = MatchSpy::get_module_part(extension);
         ValueCountMatchSpy::get_module_part(extension,cMatchSpy);

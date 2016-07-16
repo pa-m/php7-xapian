@@ -50,7 +50,8 @@ for($pass=0;$pass<10;++$pass){
 	$doc->set_data("data");
 	assertEquals("data",$doc->get_data(),"check document set_data/get_data");
 	$tg=new XapianTermGenerator();
-	$tg->set_stemmer(new XapianStem("fr"));
+	$stemmer=new XapianStem("fr");
+	$tg->set_stemmer($stemmer);
 
 	$stopper = new XapianSimpleStopper();
 	assertEquals("XapianSimpleStopper",get_class($stopper),"check stopper is a stopper");
@@ -66,9 +67,13 @@ for($pass=0;$pass<10;++$pass){
 	$db->add_document($doc);
 	assertEquals(1,$db->get_doccount(),"check doccount returns 1 after add_document");
 	$queryParser = new XapianQueryParser();
-	$query = $queryParser->parse_query("some text");
+	$queryParser->set_stemmer($stemmer);
+	$queryParser->set_stopper($stopper);
+	$queryParser->set_stemming_strategy(XapianQueryParser::STEM_SOME);
+	$query = $queryParser->parse_query("some text",XapianQueryParser::FLAG_PHRASE);
 	assertEquals("XapianQuery", get_class($query),"check parse_query returns a query");
-	assertEquals("Query((some@1 OR text@2))", $query->get_description(),"check query description");
+	assertEquals("Query((Zsom@1 OR Ztext@2))", $query->get_description(),"check query description");
+	assertEquals("",$queryParser->get_corrected_query_string(),"check corrected query string");
 	$enquire = new XapianEnquire($db);
 	//echo "after new enquire\n";
 	$enquire->set_query($query);
@@ -81,7 +86,11 @@ for($pass=0;$pass<10;++$pass){
 	$enquire->add_matchspy($vcMatchSpy);
 	$mdecider = null;
 	$mdecider = new MyMatchDecider();
+	$enquire->set_docid_order(XapianEnquire::DONT_CARE);
+	$enquire->set_sort_by_value(0,false);
+	$enquire->set_sort_by_value_then_relevance(0,false);
 	$enquire->set_sort_by_relevance_then_value(0,false);
+	$enquire->set_collapse_key(0,1);
 	$mset = $enquire->get_mset(0,1,1,null,$mdecider);
 	assertEquals("XapianMSet",get_class($mset),"check get_mset returns a MSet");
 	assertEquals(1,$mset->size(),"check mset size");
@@ -111,6 +120,12 @@ for($pass=0;$pass<10;++$pass){
 		for($i=$b;!$i->equals($e);$i->next()) $values[]=$i->get_valueno().":".$i->get_value();
 		assertEquals("0:value for slot 0",join(", ",$values),"check found-doc values");
 	}
+	$rset = new XapianRSet;
+	$eset = $enquire->get_eset(20,$rset);
+	$esetterms=[];
+	for($it=$eset->begin(),$esetend=$eset->end();!$it->equals($esetend);$it->next()) $esetterms[]=$it->get_term();
+	assertEquals('[]',json_encode($esetterms),"check expand set");
+	
 	$enquire->clear_matchspies();
 	echo "ok\n";
 	$db->close();

@@ -139,3 +139,5 @@ install:        ${EXTENSION}
 
 clean:
 						${RM} ${EXTENSION} ${OBJECTS}
+deb:
+	./mkdeb.sh
