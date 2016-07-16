@@ -469,15 +469,69 @@ public:
     }
 };
 
-class Query: public Php::Base, public Xapian::Query {
+class Query: public Php::Base {
+    typedef Xapian::Query B;
+    std::shared_ptr<B> m;
 public:
-    Query(const Xapian::Query&e):Xapian::Query(e){}
-    Query(std::string str):Xapian::Query(str){}
+    Query(){m.reset(new B());}
+    Query(const B&e){m.reset(new B(e));}
+    operator B*(){return m.get();}
     virtual ~Query(){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::Query::get_description();}
+    void __construct(Php::Parameters &params){
+        //Php::out << "new Query...\n" << params.size() << std::flush;
+        if(params.size()==1 && params[0].isString()){
+            m.reset(new B(params[0].stringValue()));
+            return;
+        }
+        if(params.size()==1 && params[0].isObject()){
+            //Php::out << "new Query(query)\n" << std::flush;
+            m.reset((B*)*dynamic_cast<Query*>(params[0].implementation()));
+            return;
+        }
+        if(params.size()>=3 && params[0].isNumeric()){
+            m.reset(
+                new B(
+                    (B::op)params[0].numericValue(),
+                    *(B*)*dynamic_cast<Query*>(params[1].implementation()),
+                    *(B*)*dynamic_cast<Query*>(params[2].implementation())
+                    )
+            );
+            return;
+        }
+        if(params.size()==4 && params[0].isNumeric()){
+            m.reset(
+                new B(
+                    (B::op)params[0].numericValue(),
+                    params[1].numericValue(),
+                    params[2].stringValue(),
+                    params[3].stringValue()
+                    )
+            );
+            return;
+        }
+        throw Php::Exception("new Query:invalid arguments");
+
+    }
+    Php::Value get_description(Php::Parameters &params){return m?m->get_description():"null";}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Query> cQuery("XapianQuery");
-        cQuery.method<&Query::get_description>("get_description");
+        cQuery.method<&Query::__construct>("__construct");
+        cQuery.method<&Query::get_description>("get_description", {});
+        cQuery.constant("OP_AND",(int32_t)B::OP_AND);
+        cQuery.constant("OP_OR",(int32_t)B::OP_OR);
+        cQuery.constant("OP_AND_NOT",(int32_t)B::OP_AND_NOT);
+        cQuery.constant("OP_XOR",(int32_t)B::OP_XOR);
+        cQuery.constant("OP_AND_MAYBE",(int32_t)B::OP_AND_MAYBE);
+        cQuery.constant("OP_FILTER",(int32_t)B::OP_FILTER);
+        cQuery.constant("OP_NEAR",(int32_t)B::OP_NEAR);
+        cQuery.constant("OP_PHRASE",(int32_t)B::OP_PHRASE);
+        cQuery.constant("OP_VALUE_RANGE",(int32_t)B::OP_VALUE_RANGE);
+        cQuery.constant("OP_SCALE_WEIGHT",(int32_t)B::OP_SCALE_WEIGHT);
+        cQuery.constant("OP_ELITE_SET",(int32_t)B::OP_ELITE_SET);
+        cQuery.constant("OP_VALUE_GE",(int32_t)B::OP_VALUE_GE);
+        cQuery.constant("OP_VALUE_LE",(int32_t)B::OP_VALUE_LE);
+        cQuery.constant("OP_SYNONYM",(int32_t)B::OP_SYNONYM);
+
         extension.add(std::move(cQuery));
     }
 };
@@ -535,7 +589,12 @@ public:
 
     virtual ~Enquire(){}
     Php::Value get_description(Php::Parameters &params){return m ? m->get_description():"null";}
-    void set_query(Php::Parameters& params){m->set_query(*dynamic_cast<Xapian::Query*>(params[0].implementation()));}
+    void set_query(Php::Parameters& params){
+        Query*Q=dynamic_cast<Query*>(params[0].implementation());
+        if(!Q) throw Php::Exception("set_query:invalid arg");
+
+        m->set_query(*(Xapian::Query*)*Q);
+    }
     Php::Value get_query(Php::Parameters& params){
         Xapian::Query xq = m->get_query();
         return Php::Object("XapianQuery",new Query(xq));
@@ -558,15 +617,32 @@ public:
         if(spy1)
             m->add_matchspy(*spy1);
     }
+    void set_sort_by_relevance(Php::Parameters& params){m->set_sort_by_relevance();}
+    void set_sort_by_value(Php::Parameters& params){m->set_sort_by_value(params[0].numericValue(),params[1].boolValue());}
+    void set_sort_by_value_then_relevance(Php::Parameters& params){m->set_sort_by_value_then_relevance(params[0].numericValue(),params[1].boolValue());}
+    void set_sort_by_relevance_then_value(Php::Parameters& params){m->set_sort_by_relevance_then_value(params[0].numericValue(),params[1].boolValue());}
+    void set_docid_order(Php::Parameters& params){m->set_docid_order((Xapian::Enquire::docid_order)params[0].numericValue());}
+    void set_collapse_key(Php::Parameters& params){m->set_collapse_key(params[0].numericValue(),params[1].numericValue());}
+    void set_cutoff(Php::Parameters& params){m->set_cutoff(params[0].numericValue(),params[1].floatValue());}
     void clear_matchspies(Php::Parameters& params){m->clear_matchspies();}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Enquire> cEnquire("XapianEnquire");
+        cEnquire.constant("ASCENDING",(int32_t)B::ASCENDING);
+        cEnquire.constant("DESCENDING",(int32_t)B::DESCENDING);
+        cEnquire.constant("DONT_CARE",(int32_t)B::DONT_CARE);
         cEnquire.method<&Enquire::__construct>("__construct");
         cEnquire.method<&Enquire::set_query>("set_query",{Php::ByVal("query","XapianQuery")});
         cEnquire.method<&Enquire::get_query>("get_query",{});
         cEnquire.method<&Enquire::get_mset>("get_mset");
         cEnquire.method<&Enquire::add_matchspy>("add_matchspy",{Php::ByVal("matchspy",Php::Type::Object)});
-        cEnquire.method<&Enquire::clear_matchspies>("clear_matchspies");
+        cEnquire.method<&Enquire::clear_matchspies>("clear_matchspies",{});
+        cEnquire.method<&Enquire::set_sort_by_relevance>("set_sort_by_relevance",{});
+        cEnquire.method<&Enquire::set_sort_by_value>("set_sort_by_value",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("reverse",Php::Type::Bool)});
+        cEnquire.method<&Enquire::set_sort_by_value_then_relevance>("set_sort_by_value_then_relevance",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("reverse",Php::Type::Bool)});
+        cEnquire.method<&Enquire::set_sort_by_relevance_then_value>("set_sort_by_relevance_then_value",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("reverse",Php::Type::Bool)});
+        cEnquire.method<&Enquire::set_docid_order>("set_docid_order",{Php::ByVal("docid_order",Php::Type::Numeric)});
+        cEnquire.method<&Enquire::set_collapse_key>("set_collapse_key",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("collapse_max",Php::Type::Numeric)});
+        cEnquire.method<&Enquire::set_cutoff>("set_cutoff",{Php::ByVal("percent",Php::Type::Numeric),Php::ByVal("weight",Php::Type::Float)});
         extension.add(std::move(cEnquire));
     }
 };

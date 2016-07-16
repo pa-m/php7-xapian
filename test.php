@@ -70,7 +70,9 @@ for($pass=0;$pass<10;++$pass){
 	assertEquals("XapianQuery", get_class($query),"check parse_query returns a query");
 	assertEquals("Query((some@1 OR text@2))", $query->get_description(),"check query description");
 	$enquire = new XapianEnquire($db);
+	//echo "after new enquire\n";
 	$enquire->set_query($query);
+	//echo "after set query\n";
 	assertEquals($query,$enquire->get_query(),"check enquire set/get query");
 	$matchSpy=new MyMatchSpy;
 	$enquire->add_matchspy($matchSpy);
@@ -79,6 +81,7 @@ for($pass=0;$pass<10;++$pass){
 	$enquire->add_matchspy($vcMatchSpy);
 	$mdecider = null;
 	$mdecider = new MyMatchDecider();
+	$enquire->set_sort_by_relevance_then_value(0,false);
 	$mset = $enquire->get_mset(0,1,1,null,$mdecider);
 	assertEquals("XapianMSet",get_class($mset),"check get_mset returns a MSet");
 	assertEquals(1,$mset->size(),"check mset size");
@@ -92,6 +95,7 @@ for($pass=0;$pass<10;++$pass){
 	$mSetEnd = $mset->end();
 	for($it=$mset->begin();!$it->equals($mSetEnd);$it->next()){
 		$doc = $it->get_document();
+		assertEquals("data",$doc->get_data(),"check found-doc data");
 		assertEquals("value for slot 0",$doc->get_value(0),"check found-document  value");
 		$terms=[];
 		$b=$doc->termlist_begin();
@@ -107,6 +111,7 @@ for($pass=0;$pass<10;++$pass){
 		for($i=$b;!$i->equals($e);$i->next()) $values[]=$i->get_valueno().":".$i->get_value();
 		assertEquals("0:value for slot 0",join(", ",$values),"check found-doc values");
 	}
+	$enquire->clear_matchspies();
 	echo "ok\n";
 	$db->close();
 } 
