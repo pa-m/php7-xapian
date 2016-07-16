@@ -74,12 +74,20 @@ for($pass=0;$pass<10;++$pass){
 	assertEquals($query,$enquire->get_query(),"check enquire set/get query");
 	$matchSpy=new MyMatchSpy;
 	$enquire->add_matchspy($matchSpy);
+	$vcMatchSpy = new XapianValueCountMatchSpy(0);
+	assertEquals("XapianValueCountMatchSpy",get_class($vcMatchSpy),"check valueCountMatchSpy class");
+	$enquire->add_matchspy($vcMatchSpy);
 	$mdecider = null;
 	$mdecider = new MyMatchDecider();
 	$mset = $enquire->get_mset(0,1,1,null,$mdecider);
 	assertEquals("XapianMSet",get_class($mset),"check get_mset returns a MSet");
 	assertEquals(1,$mset->size(),"check mset size");
 	assertEquals(1,$matchSpy->calls,"check matchSpy called");
+	assertEquals(1,$vcMatchSpy->get_total(),"check valueCountMatchSpy total");
+	$vcMatchSpyValues=[];
+	for($i=$vcMatchSpy->values_begin(),$e=$vcMatchSpy->values_end();!$i->equals($e);$i->next()) 
+		$vcMatchSpyValues[$i->get_term()]=$i->get_termfreq();
+	assertEquals('{"value for slot 0":1}',json_encode($vcMatchSpyValues),"check valueCountMatchSpy values");
 	$mdecider && assertEquals(1,$mdecider->calls,"check mdecider called");
 	$mSetEnd = $mset->end();
 	for($it=$mset->begin();!$it->equals($mSetEnd);$it->next()){

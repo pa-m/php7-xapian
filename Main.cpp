@@ -331,24 +331,53 @@ public:
         Php::Array fn({this,"apply"});
         fn(Php::Object("XapianDocument",new Document(doc)), Php::Value(wt));
     }
-    static void get_module_part(Php::Extension& extension){
+    static Php::Class<MatchSpy> get_module_part(Php::Extension& extension){
         Php::Class<MatchSpy> cMatchSpy("XapianMatchSpy");
         cMatchSpy.method<&MatchSpy::__construct>("__construct",{});
         cMatchSpy.method<&MatchSpy::get_description>("get_description",{});
         cMatchSpy.method<&MatchSpy::apply>("apply",{Php::ByVal("doc"),Php::ByVal("wt")});
         extension.add(std::move(cMatchSpy));
+        return cMatchSpy;
     }
 };
 
-class ValueCountMatchSpy: public Php::Base, public Xapian::ValueCountMatchSpy {
+class ValueCountMatchSpy: public Php::Base {
+    typedef Xapian::ValueCountMatchSpy B;
+    std::shared_ptr<B> m;
 public:
-    ValueCountMatchSpy():Xapian::ValueCountMatchSpy(){}
-    //ValueCountMatchSpy(const Xapian::ValueCountMatchSpy& e):Xapian::ValueCountMatchSpy(e){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::ValueCountMatchSpy::get_description();}
-    virtual ~ValueCountMatchSpy(){}
-    static void get_module_part(Php::Extension& extension){
+    ValueCountMatchSpy(){m.reset(new B());}
+    operator B*() {return m.get();}
+    void __construct(Php::Parameters &params){
+        if(params.size()>0){
+            m.reset(new B(params[0].numericValue()));
+        }
+    }
+    Php::Value get_description(Php::Parameters &params){return m->get_description();}
+    Php::Value get_total(Php::Parameters& params){
+        return (int32_t)m->get_total();}
+    Php::Value values_begin(Php::Parameters& params){return Php::Object("XapianTermIterator",new TermIterator(m->values_begin()));}
+    Php::Value values_end(Php::Parameters& params){return Php::Object("XapianTermIterator",new TermIterator(m->values_end()));}
+    Php::Value top_values_begin(Php::Parameters& params){return Php::Object("XapianTermIterator",new TermIterator(m->top_values_begin(params[0].numericValue())));}
+    Php::Value top_values_end(Php::Parameters& params){return Php::Object("XapianTermIterator",new TermIterator(m->top_values_end(params[0].numericValue())));}
+    Php::Value name(Php::Parameters& params){return m->name();}
+    virtual void    operator() (const Xapian::Document &doc, double wt){
+        (*m)(doc,wt);
+        Php::Array fn({this,"apply"});
+        fn(Php::Object("XapianDocument",new Document(doc)), Php::Value(wt));
+    }
+    
+    virtual ~ValueCountMatchSpy(){m.reset();}
+    static void get_module_part(Php::Extension& extension,Php::Class<::MatchSpy>& cMatchSpy){
         Php::Class<ValueCountMatchSpy> cValueCountMatchSpy("XapianValueCountMatchSpy");
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::__construct>("__construct",{Php::ByVal("valueno",Php::Type::Numeric)});
         cValueCountMatchSpy.method<&ValueCountMatchSpy::get_description>("get_description",{});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::get_total>("get_total",{});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::values_begin>("values_begin",{});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::values_end>("values_end",{});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::top_values_begin>("top_values_begin",{Php::ByVal("maxitems",Php::Type::Numeric)});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::top_values_end>("top_values_end",{Php::ByVal("maxitems",Php::Type::Numeric)});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::name>("name",{});
+        cValueCountMatchSpy.extends(cMatchSpy);
         extension.add(std::move(cValueCountMatchSpy));
     }
 };
@@ -403,9 +432,6 @@ class WritableDatabase: public Php::Base, public Xapian::WritableDatabase {
 public:
     WritableDatabase():B(){}
     WritableDatabase(const B&d):B(d){}
-    /*WritableDatabase(std::string path,int flags):B(path,flags){
-        Php::out << "WritableDatabase(std::string path,int flags)\n" << std::flush;
-    }*/
     void __construct(Php::Parameters& params){
         if(params.size()>0){
             if(params[0].isObject()){
@@ -414,7 +440,6 @@ public:
             }
             std::string path = params[0].stringValue();
             int action=params.size()>1 ? params[1].numericValue() : 0;
-            //Php::out << "WritableDatabase path=" << path << ", action=" << action << "\n" << std::flush;
             *this = B(path,action);
         }
     }    
@@ -517,17 +542,22 @@ public:
     }
     Php::Value get_mset(Php::Parameters& params){
         if(params.size()<3) throw new Php::Exception("get_mset must have 3-5 args");
-        //Php::out << "get_mset\n"<<std::flush;
         Xapian::doccount first=params[0].numericValue();
         Xapian::doccount maxitems=params[1].numericValue();
         Xapian::doccount checkatleast=params[2].numericValue();
         RSet* omrset = params.size()>3 ? dynamic_cast<RSet*>(params[3].implementation()) : NULL;
         MatchDecider* mdecider = params.size()>4 ? dynamic_cast<MatchDecider*>(params[4].implementation()) : NULL;
         Xapian::MSet mset=m->get_mset(first,maxitems,checkatleast,omrset,mdecider);
-        //Php::out <<"mset size:"<<(((Xapian::MSet)mset).size())<<std::endl<<std::flush;
         return Php::Object("XapianMSet",new MSet(mset));
     }
-    void add_matchspy(Php::Parameters& params){m->add_matchspy(dynamic_cast<MatchSpy*>(params[0].implementation()));}
+    void add_matchspy(Php::Parameters& params){
+        MatchSpy* spy0 = dynamic_cast<MatchSpy*>(params[0].implementation());
+        if(spy0)
+            m->add_matchspy(spy0);
+        ValueCountMatchSpy* spy1 = dynamic_cast<ValueCountMatchSpy*>(params[0].implementation());
+        if(spy1)
+            m->add_matchspy(*spy1);
+    }
     void clear_matchspies(Php::Parameters& params){m->clear_matchspies();}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Enquire> cEnquire("XapianEnquire");
@@ -621,8 +651,8 @@ extern "C" {
         MSetIterator::get_module_part(extension);
         RSet::get_module_part(extension);
         ESet::get_module_part(extension);
-        MatchSpy::get_module_part(extension);
-        ValueCountMatchSpy::get_module_part(extension);
+        Php::Class<MatchSpy> cMatchSpy = MatchSpy::get_module_part(extension);
+        ValueCountMatchSpy::get_module_part(extension,cMatchSpy);
         MatchDecider::get_module_part(extension);
         Php::Class<Database> cDatabase=Database::get_module_part(extension);
         WritableDatabase::get_module_part(extension,cDatabase);
