@@ -14,6 +14,7 @@ public:
 };
 
 class Compactor: public Php::Base {
+    typedef Xapian::Compactor B;
     std::shared_ptr<Xapian::Compactor> m;
 public:
     Compactor(){m.reset(new Xapian::Compactor());}
@@ -29,12 +30,17 @@ public:
         //deprecated Use Database::compact(destdir[, compactor]) instead.
         m->compact();
     }
+    void set_compaction_level(Php::Parameters & params){m->set_compaction_level((B::compaction_level)params[0].numericValue());}
     virtual ~Compactor(){m=NULL;}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Compactor> cCompactor("XapianCompactor");
         cCompactor.method<&Compactor::add_source>("add_source");
         cCompactor.method<&Compactor::set_destdir>("set_destdir");
         cCompactor.method<&Compactor::compact>("compact");
+        cCompactor.method<&Compactor::set_compaction_level>("set_compaction_level",{Php::ByVal("compaction",Php::Type::Numeric)});
+        cCompactor.constant("STANDARD",B::STANDARD);
+        cCompactor.constant("FULL",B::FULL);
+        cCompactor.constant("FULLER",B::FULLER);
         extension.add(std::move(cCompactor));
     }
 };
@@ -176,6 +182,7 @@ public:
         std::string prefix = params.size()>2 ? params[2].stringValue() : "";
         B::index_text(params[0].stringValue(),wdfinc,prefix);
     }
+    Php::Value set_flags(Php::Parameters& params) { return B::set_flags(params[0].numericValue(),params.size()<2 ? 0: params[1].numericValue());}
     virtual ~TermGenerator(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<TermGenerator> cTermGenerator("XapianTermGenerator");
@@ -185,6 +192,15 @@ public:
         cTermGenerator.method<&TermGenerator::set_database>("set_database",{Php::ByVal("database","XapianWritableDatabase")});
         cTermGenerator.method<&TermGenerator::set_document>("set_document",{Php::ByVal("document","XapianDocument")});
         cTermGenerator.method<&TermGenerator::index_text>("index_text");
+        cTermGenerator.method<&TermGenerator::set_flags>("set_flags",{Php::ByVal("flags",Php::Type::Numeric)});
+        cTermGenerator.constant("FLAG_SPELLING",B::FLAG_SPELLING);
+        cTermGenerator.constant("STEM_NONE",B::STEM_NONE); 
+        cTermGenerator.constant("STEM_SOME",B::STEM_SOME); 
+        cTermGenerator.constant("STEM_ALL",B::STEM_ALL);
+        cTermGenerator.constant("STEM_ALL_Z",B::STEM_ALL_Z);
+        cTermGenerator.constant("STOP_NONE",B::STOP_NONE);
+        cTermGenerator.constant("STOP_ALL",B::STOP_ALL);
+        cTermGenerator.constant("STOP_STEMMED",B::STOP_STEMMED);
         extension.add(std::move(cTermGenerator));
     }
 };
@@ -215,7 +231,9 @@ public:
     Php::Value values_count(Php::Parameters &params){return (int32_t)B::values_count();}
     Php::Value values_begin(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::values_begin()));}
     Php::Value values_end(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::values_end()));}
-
+    void add_term(Php::Parameters &params){B::add_term(params[0].stringValue(),params.size()<2 ? 1 : params[1].numericValue());}
+    void add_boolean_term(Php::Parameters &params){B::add_boolean_term(params[0].stringValue());}
+    Php::Value get_docid(Php::Parameters &params){return (int32_t)B::get_docid();}
     virtual ~Document(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<Document> cDocument("XapianDocument");
@@ -232,6 +250,9 @@ public:
         cDocument.method<&Document::values_count>("values_count",{});
         cDocument.method<&Document::values_begin>("values_begin",{});
         cDocument.method<&Document::values_end>("values_end",{});
+        cDocument.method<&Document::add_term>("add_term",{Php::ByVal("term",Php::Type::String)});
+        cDocument.method<&Document::add_boolean_term>("add_boolean_term",{Php::ByVal("term",Php::Type::String)});
+        cDocument.method<&Document::get_docid>("get_docid",{});
         //cDocument.method<&Document::m>("m");
         extension.add(std::move(cDocument));
     }
@@ -435,12 +456,19 @@ public:
 };
 
 
-class Database: public Php::Base, public Xapian::Database {
+class Database: public Php::Base , public Xapian::Database {
     typedef Xapian::Database B;
 public:
     Database():B(){}
-    Database(const B&d):B(d){}
-    Database(std::string path,int flags):B(path,flags){}
+    Database(const B&db):B(db){}
+    void __construct(Php::Parameters &params){
+        Database *db = dynamic_cast<Database*>(params[0].implementation());
+        if(db) {
+            *this=*db;
+            return;
+        }
+        *this = B(params[0].stringValue(),params.size()<2 ? 0 : params[1].numericValue());
+    }
     void close(Php::Parameters &params){ B::close();}
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
     void add_database(Php::Parameters &params){
@@ -448,13 +476,20 @@ public:
         B::add_database(*db);
     }
     Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
+    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+    Php::Value get_metadata(Php::Parameters &params){return B::get_metadata(params[0].stringValue());}
     virtual ~Database(){}
     static Php::Class<Database>  get_module_part(Php::Extension& extension){
         Php::Class<Database> cDatabase("XapianDatabase");
+        cDatabase.method<&Database::__construct>("__construct",{Php::ByVal("enquireOrDatabase")});
         cDatabase.method<&Database::close>("close");
         cDatabase.method<&Database::get_doccount>("get_doccount");
         cDatabase.method<&Database::add_database>("add_database");
         cDatabase.method<&Database::get_description>("get_description",{});
+        cDatabase.method<&Database::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::get_metadata>("get_metadata",{Php::ByVal("value",Php::Type::String)});
         extension.add(std::move(cDatabase));
         return cDatabase;
     }
@@ -462,7 +497,6 @@ public:
 
 class WritableDatabase: public Php::Base, public Xapian::WritableDatabase {
     typedef Xapian::WritableDatabase B;
-    std::shared_ptr<B> m;
 public:
     WritableDatabase():B(){}
     WritableDatabase(const B&d):B(d){}
@@ -486,7 +520,23 @@ public:
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
     Php::Value get_description(Php::Parameters &params){return B::get_description();}
     void add_document(Php::Parameters &params){B::add_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));}
-
+    Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
+    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+    Php::Value get_metadata(Php::Parameters &params){return (B::get_metadata(params[0].stringValue()));}
+    void set_metadata(Php::Parameters & params){B::set_metadata(params[0].stringValue(),params[1].stringValue());}
+    Php::Value replace_document(Php::Parameters &params){
+        if(params[0].isNumeric())  {
+            B::replace_document((Xapian::docid)params[0].numericValue(),*dynamic_cast<Document*>(params[1].implementation()));
+            return 0;
+        }
+        return (int32_t)B::replace_document(params[0].stringValue(),*dynamic_cast<Document*>(params[1].implementation()));
+    }
+    void delete_document(Php::Parameters & params){
+        try {
+            if(params[0].isNumeric()) B::delete_document((Xapian::docid)params[0].numericValue());
+            B::delete_document(params[0].stringValue());
+        }catch(Xapian::DocNotFoundError e){}
+    }
     static void get_module_part(Php::Extension& extension,Php::Class<::Database>& cDatabase){
         Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
         cWritableDatabase.method<&WritableDatabase::__construct>("__construct");
@@ -498,6 +548,12 @@ public:
         cWritableDatabase.method<&WritableDatabase::close>("close");
         cWritableDatabase.method<&WritableDatabase::get_doccount>("get_doccount");
         cWritableDatabase.method<&WritableDatabase::add_document>("add_document");
+        cWritableDatabase.method<&WritableDatabase::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::get_metadata>("get_metadata",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::set_metadata>("set_metadata",{Php::ByVal("key",Php::Type::String),Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::replace_document>("replace_document",{Php::ByVal("docIdOrUniqueTerm"),Php::ByVal("doc","XapianDocument")});
+        cWritableDatabase.method<&WritableDatabase::delete_document>("delete_document",{Php::ByVal("docIdOrUniqueTerm")});
         cWritableDatabase.extends(cDatabase);
         extension.add(std::move(cWritableDatabase));
     }
@@ -522,7 +578,7 @@ public:
             m.reset((B*)*dynamic_cast<Query*>(params[0].implementation()));
             return;
         }
-        if(params.size()>=3 && params[0].isNumeric()){
+        if(params.size()==3 && params[0].isNumeric()){
             m.reset(
                 new B(
                     (B::op)params[0].numericValue(),
@@ -637,9 +693,10 @@ protected:
     typedef Xapian::Enquire B;
     std::shared_ptr<Xapian::Enquire> m;
 public:
-    //Enquire(Database*db){m.reset(new Xapian::Enquire(*db));}
+    Enquire(Database*db){m.reset(new Xapian::Enquire(*db));}
     Enquire(){}
     void __construct(Php::Parameters& params){
+        //Php::out << "Enquire::__construct " << params.size() << " " << Php::call("get_class", params[0]) << std::endl << std::flush;
         if(params.size()<1) throw Php::Exception("Enquire ctor requires 1 arg");
         Enquire *enq = dynamic_cast<Enquire*>(params[0].implementation());
         if(enq) {
@@ -672,10 +729,10 @@ public:
         return Php::Object("XapianQuery",new Query(xq));
     }
     Php::Value get_mset(Php::Parameters& params){
-        if(params.size()<3) throw new Php::Exception("get_mset must have 3-5 args");
+        if(params.size()<2) throw new Php::Exception("get_mset must have 2-5 args");
         Xapian::doccount first=params[0].numericValue();
         Xapian::doccount maxitems=params[1].numericValue();
-        Xapian::doccount checkatleast=params[2].numericValue();
+        Xapian::doccount checkatleast=params.size()<3 ? 0 : params[2].numericValue();
         RSet* omrset = params.size()>3 ? dynamic_cast<RSet*>(params[3].implementation()) : NULL;
         MatchDecider* mdecider = params.size()>4 ? dynamic_cast<MatchDecider*>(params[4].implementation()) : NULL;
         Xapian::MSet mset=m->get_mset(first,maxitems,checkatleast,omrset,mdecider);
@@ -690,9 +747,9 @@ public:
             m->add_matchspy(*spy1);
     }
     void set_sort_by_relevance(Php::Parameters& params){m->set_sort_by_relevance();}
-    void set_sort_by_value(Php::Parameters& params){m->set_sort_by_value(params[0].numericValue(),params[1].boolValue());}
-    void set_sort_by_value_then_relevance(Php::Parameters& params){m->set_sort_by_value_then_relevance(params[0].numericValue(),params[1].boolValue());}
-    void set_sort_by_relevance_then_value(Php::Parameters& params){m->set_sort_by_relevance_then_value(params[0].numericValue(),params[1].boolValue());}
+    void set_sort_by_value(Php::Parameters& params){m->set_sort_by_value(params[0].numericValue(),params.size()<2 ? false : params[1].boolValue());}
+    void set_sort_by_value_then_relevance(Php::Parameters& params){m->set_sort_by_value_then_relevance(params[0].numericValue(),params.size()<2 ? false : params[1].boolValue());}
+    void set_sort_by_relevance_then_value(Php::Parameters& params){m->set_sort_by_relevance_then_value(params[0].numericValue(),params.size()<2 ? false : params[1].boolValue());}
     void set_docid_order(Php::Parameters& params){m->set_docid_order((Xapian::Enquire::docid_order)params[0].numericValue());}
     void set_collapse_key(Php::Parameters& params){m->set_collapse_key(params[0].numericValue(),params[1].numericValue());}
     void set_cutoff(Php::Parameters& params){m->set_cutoff(params[0].numericValue(),params[1].floatValue());}
@@ -718,7 +775,7 @@ ESet    get_eset (Xapian::termcount maxitems, const RSet &rset, int flags, doubl
         cEnquire.constant("ASCENDING",(int32_t)B::ASCENDING);
         cEnquire.constant("DESCENDING",(int32_t)B::DESCENDING);
         cEnquire.constant("DONT_CARE",(int32_t)B::DONT_CARE);
-        cEnquire.method<&Enquire::__construct>("__construct");
+        cEnquire.method<&Enquire::__construct>("__construct",{Php::ByVal("enquireOrDatabase",Php::Type::Object)});
         cEnquire.method<&Enquire::set_query>("set_query",{Php::ByVal("query","XapianQuery")});
         cEnquire.method<&Enquire::get_query>("get_query",{});
         cEnquire.method<&Enquire::get_mset>("get_mset");
@@ -726,9 +783,9 @@ ESet    get_eset (Xapian::termcount maxitems, const RSet &rset, int flags, doubl
         cEnquire.method<&Enquire::add_matchspy>("add_matchspy",{Php::ByVal("matchspy",Php::Type::Object)});
         cEnquire.method<&Enquire::clear_matchspies>("clear_matchspies",{});
         cEnquire.method<&Enquire::set_sort_by_relevance>("set_sort_by_relevance",{});
-        cEnquire.method<&Enquire::set_sort_by_value>("set_sort_by_value",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("reverse",Php::Type::Bool)});
-        cEnquire.method<&Enquire::set_sort_by_value_then_relevance>("set_sort_by_value_then_relevance",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("reverse",Php::Type::Bool)});
-        cEnquire.method<&Enquire::set_sort_by_relevance_then_value>("set_sort_by_relevance_then_value",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("reverse",Php::Type::Bool)});
+        cEnquire.method<&Enquire::set_sort_by_value>("set_sort_by_value",{Php::ByVal("valueno",Php::Type::Numeric)});
+        cEnquire.method<&Enquire::set_sort_by_value_then_relevance>("set_sort_by_value_then_relevance",{Php::ByVal("valueno",Php::Type::Numeric)});
+        cEnquire.method<&Enquire::set_sort_by_relevance_then_value>("set_sort_by_relevance_then_value",{Php::ByVal("valueno",Php::Type::Numeric)});
         cEnquire.method<&Enquire::set_docid_order>("set_docid_order",{Php::ByVal("docid_order",Php::Type::Numeric)});
         cEnquire.method<&Enquire::set_collapse_key>("set_collapse_key",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("collapse_max",Php::Type::Numeric)});
         cEnquire.method<&Enquire::set_cutoff>("set_cutoff",{Php::ByVal("percent",Php::Type::Numeric),Php::ByVal("weight",Php::Type::Float)});

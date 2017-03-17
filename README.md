@@ -3,12 +3,15 @@
 
 ## build env
 
+docker-compose up -d
+docker exec -it php7xapian bash
+
 docker run -it -v ~/projects:/root/projects debian:testing
 
 apt-get update
 apt-get install -y --no-install-recommends php7.0-dev xzdec curl g++-6 uuid-dev make sudo
 
-## build xapian-core and make libxapian22 deb package
+## build xapian-core and make libxapian30 deb package
 
 ```bash
 cd ~/projects
@@ -16,26 +19,28 @@ curl http://oligarchy.co.uk/xapian/1.4.0/xapian-core-1.4.0.tar.xz|xzdec|tar -xf 
 cd xapian-core-1.4.0/
 ./configure prefix=/usr
 make
-make install prefix=/tmp/libxapian22/usr
+make install  prefix=/usr
 
-mkdir -p /tmp/libxapian22/DEBIAN
-cat <<END > /tmp/libxapian22/DEBIAN/control
-Package: libxapian22
+make install prefix=/tmp/libxapian30/usr
+
+mkdir -p /tmp/libxapian30/DEBIAN
+cat <<END > /tmp/libxapian30/DEBIAN/control
+Package: libxapian30
 Architecture: amd64
 Maintainer: pascal.masschelier@elbee.fr
 Depends: libc6 (>= 2.11), libgcc1 (>= 1:4.1.1), libstdc++6 (>= 4.4), libuuid1 (>= 2.16), zlib1g (>= 1:1.1.4)
 Priority: optional
-Version: 1.4.0
+Version: 1.4.3
 Description: xapian search engine
 END
 
-cat <<END > /tmp/libxapian22/DEBIAN/conffiles
+cat <<END > /tmp/libxapian30/DEBIAN/conffiles
 END
 
-(cd /tmp;dpkg-deb -b libxapian22)
+(cd /tmp;dpkg-deb -b libxapian30)
 
-dpkg -i /tmp/libxapian22.deb
-#docker cp 4407da48e4d8:/tmp/libxapian22.deb /media/sd_D/hubiC/public/libxapian22-1.4.0-amd64-testing.deb
+dpkg -i /tmp/libxapian30.deb
+#docker cp 4407da48e4d8:/tmp/libxapian30.deb /media/sd_D/hubiC/public/libxapian30-1.4.3_amd64_stretch.deb
 ```
 
 ## build bindings
@@ -67,8 +72,10 @@ make install && php -f test.php
 mkdir -p /tmp/php7.0-xapian/$(php-config --extension-dir)
 mkdir -p /tmp/php7.0-xapian/etc/php/7.0/mods-available
 mkdir -p /tmp/php7.0-xapian/DEBIAN
+mkdir -p /tmp/php7.0-xapian/usr/lib
 cp xapian.so /tmp/php7.0-xapian/$(php-config --extension-dir)/
 cp xapian.ini /tmp/php7.0-xapian/etc/php/7.0/mods-available/
+cp /usr/lib/lipphpcpp.so* /tmp/php7.0-xapian/usr/lib/
 ln -sf ../../mods-available/xapian.ini /tmp/php7.0-xapian/etc/php/7.0/cli/conf.d/20-xapian.ini
 ln -sf ../../mods-available/xapian.ini /tmp/php7.0-xapian/etc/php/7.0/fpm/conf.d/20-xapian.ini
 
@@ -76,9 +83,9 @@ cat <<END > /tmp/php7.0-xapian/DEBIAN/control
 Package: php7.0-xapian
 Architecture: amd64
 Maintainer: pascal.masschelier@elbee.fr
-Depends: libxapian22 (>=1.4)
+Depends: libxapian30 (>=1.4.3)
 Priority: optional
-Version: 1.4.0
+Version: 1.4.3
 Description: xapian search engine bindings for php7
 END
 
@@ -89,7 +96,7 @@ END
 dpkg --contents /tmp/php7.0-xapian.deb
 dpkg -i /tmp/php7.0-xapian.deb
 
-#docker cp 4407da48e4d8:/tmp/php7.0-xapian.deb /media/sd_D/hubiC/public/php7.0-xapian-1.4.0-amd64-testing.deb
+#docker cp 4407da48e4d8:/tmp/php7.0-xapian.deb /media/sd_D/hubiC/public/php7.0-xapian-1.4.3_amd64_stretch.deb
 ```
 
 
