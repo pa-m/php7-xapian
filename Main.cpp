@@ -13,6 +13,26 @@ public:
     }
 };
 
+class BM25Weight: public Php::Base {
+    typedef Xapian::BM25Weight B;
+    std::shared_ptr<B> m;
+public:
+    BM25Weight(){m.reset(new B(1.,0.,1.,0.5,0.5));}
+    BM25Weight(double k1,double k2,double k3,double b,double min_normlen){m.reset(new B(k1,k2,k3,b,min_normlen));}
+    BM25Weight(const BM25Weight&other){m=other.m;}
+    virtual ~BM25Weight(){m.reset();}
+    operator B&(){return *m;}
+    void __construct(Php::Parameters &params) {
+        *this=BM25Weight((double)params[0],(double)params[1],(double)params[2],(double)params[3],(double)params[4]);
+    }
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<BM25Weight> cBM25Weight("XapianBM25Weight");
+        cBM25Weight.method<&BM25Weight::__construct>("__construct",{Php::ByVal("k1",Php::Type::Float),Php::ByVal("k2",Php::Type::Float),Php::ByVal("k3",Php::Type::Float),Php::ByVal("b",Php::Type::Float),Php::ByVal("min_normlen",Php::Type::Float),});
+        extension.add(std::move(cBM25Weight));
+
+    }
+};
+
 class Compactor: public Php::Base {
     typedef Xapian::Compactor B;
     std::shared_ptr<Xapian::Compactor> m;
@@ -273,6 +293,8 @@ public:
     Php::Value get_docid(Php::Parameters& params){return (int32_t)*(*(B*)this);}
     Php::Value get_document(Php::Parameters& params){return Php::Object("XapianDocument",new Document(B::get_document()));}
     Php::Value get_weight(Php::Parameters& params){return (double)B::get_weight();}
+    Php::Value get_rank(Php::Parameters& params){return (int32_t)B::get_rank();}
+    Php::Value get_percent(Php::Parameters& params){return (int32_t)B::get_percent();}
     virtual ~MSetIterator(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<MSetIterator> cMSetIterator("XapianMSetIterator");
@@ -282,6 +304,8 @@ public:
         cMSetIterator.method<&MSetIterator::get_docid>("get_docid",{});
         cMSetIterator.method<&MSetIterator::get_document>("get_document",{});
         cMSetIterator.method<&MSetIterator::get_weight>("get_weight",{});
+        cMSetIterator.method<&MSetIterator::get_rank>("get_rank",{});
+        cMSetIterator.method<&MSetIterator::get_percent>("get_percent",{});
         extension.add(std::move(cMSetIterator));
     }
 };
@@ -292,15 +316,17 @@ public:
     MSet(const Xapian::MSet &m):Xapian::MSet(m){}
     Php::Value get_description(Php::Parameters &params){return Xapian::MSet::get_description();}
     Php::Value size(Php::Parameters &params){return Php::Value((int32_t)Xapian::MSet::size());}
+    Php::Value get_matches_estimated(Php::Parameters &params){return Php::Value((int32_t)Xapian::MSet::get_matches_estimated());}
     Php::Value begin(Php::Parameters &params){return Php::Object("XapianMSetIterator",new MSetIterator(Xapian::MSet::begin()));}
     Php::Value end(Php::Parameters &params){return Php::Object("XapianMSetIterator",new MSetIterator(Xapian::MSet::end()));}
     virtual ~MSet(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<MSet> cMSet("XapianMSet");
         cMSet.method<&MSet::get_description>("get_description",{});
-        cMSet.method<&MSet::size>("size");
-        cMSet.method<&MSet::begin>("begin");
-        cMSet.method<&MSet::end>("end");
+        cMSet.method<&MSet::size>("size",{});
+        cMSet.method<&MSet::get_matches_estimated>("get_matches_estimated",{});
+        cMSet.method<&MSet::begin>("begin",{});
+        cMSet.method<&MSet::end>("end",{});
         extension.add(std::move(cMSet));
     }
 };
@@ -631,6 +657,7 @@ class QueryParser: public Php::Base, public Xapian::QueryParser {
 public:
     QueryParser():Xapian::QueryParser(){}
     QueryParser(const Xapian::QueryParser&e):Xapian::QueryParser(e){}
+    void __construct(Php::Parameters &params){}
     Php::Value get_description(Php::Parameters &params){return Xapian::QueryParser::get_description();}
     Php::Value parse_query(Php::Parameters& params){
         unsigned flags = params.size()>1 ? params[1].numericValue() : B::FLAG_DEFAULT;
@@ -658,6 +685,16 @@ public:
         }
         throw Php::Exception("set_stopper: invalid arg");
     }
+    void set_database(Php::Parameters &params){
+        Database *db = dynamic_cast<Database*>(params[0].implementation());
+        WritableDatabase *wdb = dynamic_cast<WritableDatabase*>(params[0].implementation());
+        B::set_database(db? *db:*wdb);
+    }
+    void add_boolean_prefix(Php::Parameters &params){
+        B::add_boolean_prefix(params[0].stringValue(),
+            params[1].stringValue(),
+            params.size()<3 ? false : params[2].boolValue());
+    }
     virtual ~QueryParser(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<QueryParser> cQueryParser("XapianQueryParser");
@@ -679,11 +716,14 @@ public:
         cQueryParser.constant("STEM_ALL",(int32_t)B::STEM_ALL);
         cQueryParser.constant("STEM_ALL_Z",(int32_t)B::STEM_ALL_Z);
 
-        cQueryParser.method<&QueryParser::parse_query>("parse_query");
+        cQueryParser.method<&QueryParser::__construct>("__construct",{});
+        cQueryParser.method<&QueryParser::parse_query>("parse_query",{Php::ByVal("query",Php::Type::Null),Php::ByVal("flags",Php::Type::Null,false),Php::ByVal("prefix",Php::Type::Null,false)});
         cQueryParser.method<&QueryParser::get_corrected_query_string>("get_corrected_query_string",{});
         cQueryParser.method<&QueryParser::set_stemming_strategy>("set_stemming_strategy",{Php::ByVal("stem_strategy",Php::Type::Numeric)});
         cQueryParser.method<&QueryParser::set_stemmer>("set_stemmer",{Php::ByVal("stemmer",Php::Type::Object)});
         cQueryParser.method<&QueryParser::set_stopper>("set_stopper",{Php::ByVal("stopper",Php::Type::Object)});
+        cQueryParser.method<&QueryParser::set_database>("set_database",{Php::ByVal("database",Php::Type::Object)});
+        cQueryParser.method<&QueryParser::add_boolean_prefix>("add_boolean_prefix",{Php::ByVal("field",Php::Type::String),Php::ByVal("prefix",Php::Type::String),Php::ByVal("exclusive",Php::Type::Bool,false)});
         extension.add(std::move(cQueryParser));
     }
 };
@@ -716,7 +756,7 @@ public:
         throw Php::Exception("Enquire ctor invalid arg");
     }
 
-    virtual ~Enquire(){}
+    virtual ~Enquire(){m.reset();}
     Php::Value get_description(Php::Parameters &params){return m ? m->get_description():"null";}
     void set_query(Php::Parameters& params){
         Query*Q=dynamic_cast<Query*>(params[0].implementation());
@@ -769,7 +809,10 @@ ESet    get_eset (Xapian::termcount maxitems, const RSet &rset, int flags, doubl
             double min_wt=0.;
         return Php::Object("XapianESet",new ESet(m->get_eset(maxitems,*(Xapian::RSet*)omrset,flags,edecider,min_wt)));
     }
-
+    void set_weighting_scheme(Php::Parameters & params){
+        BM25Weight * w = dynamic_cast<BM25Weight*>(params[0].implementation());
+        if(w) m->set_weighting_scheme(*w);
+    }
     static void get_module_part(Php::Extension& extension){
         Php::Class<Enquire> cEnquire("XapianEnquire");
         cEnquire.constant("ASCENDING",(int32_t)B::ASCENDING);
@@ -789,6 +832,7 @@ ESet    get_eset (Xapian::termcount maxitems, const RSet &rset, int flags, doubl
         cEnquire.method<&Enquire::set_docid_order>("set_docid_order",{Php::ByVal("docid_order",Php::Type::Numeric)});
         cEnquire.method<&Enquire::set_collapse_key>("set_collapse_key",{Php::ByVal("valueno",Php::Type::Numeric),Php::ByVal("collapse_max",Php::Type::Numeric)});
         cEnquire.method<&Enquire::set_cutoff>("set_cutoff",{Php::ByVal("percent",Php::Type::Numeric),Php::ByVal("weight",Php::Type::Float)});
+        cEnquire.method<&Enquire::set_weighting_scheme>("set_weighting_scheme",{Php::ByVal("weight",Php::Type::Object)});
         extension.add(std::move(cEnquire));
     }
 };
@@ -861,6 +905,7 @@ extern "C" {
         // @todo    add your own functions, classes, namespaces to the extension
         PhpXapian::get_module_part(extension); 
         Error::get_module_part(extension);
+        BM25Weight::get_module_part(extension);
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
         ValueIterator::get_module_part(extension);
