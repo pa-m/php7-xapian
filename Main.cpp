@@ -237,6 +237,10 @@ public:
     Php::Value get_value(Php::Parameters& params) {
         return Php::Value(B::get_value(params[0].numericValue()));
     }
+    static Php::Value Document_get_value(Php::Parameters& params){
+        B*doc = dynamic_cast<B*>(params[0].implementation());
+        return doc ? doc->get_value(params[1].numericValue()):"";
+    }
     void remove_value(Php::Parameters& params) {
         B::remove_value(params[0].numericValue());
     }
@@ -255,6 +259,8 @@ public:
     void add_boolean_term(Php::Parameters &params){B::add_boolean_term(params[0].stringValue());}
     Php::Value get_docid(Php::Parameters &params){return (int32_t)B::get_docid();}
     virtual ~Document(){}
+
+
     static void get_module_part(Php::Extension& extension){
         Php::Class<Document> cDocument("XapianDocument");
         cDocument.method<&Document::get_description>("get_description",{});
@@ -273,6 +279,8 @@ public:
         cDocument.method<&Document::add_term>("add_term",{Php::ByVal("term",Php::Type::String)});
         cDocument.method<&Document::add_boolean_term>("add_boolean_term",{Php::ByVal("term",Php::Type::String)});
         cDocument.method<&Document::get_docid>("get_docid",{});
+
+        extension.add("Document_get_value",Document_get_value,{Php::ByVal("doc","XapianDocument"),Php::ByVal("slot",Php::Type::Numeric)}); 
         //cDocument.method<&Document::m>("m");
         extension.add(std::move(cDocument));
     }
@@ -427,14 +435,14 @@ public:
 
 class ValueCountMatchSpy: public Php::Base {
     typedef Xapian::ValueCountMatchSpy B;
+    Xapian::valueno slot;
     std::shared_ptr<B> m;
 public:
-    ValueCountMatchSpy(){m.reset(new B());}
-    operator B*() {return m.get();}
+    ValueCountMatchSpy():slot(Xapian::BAD_VALUENO){m.reset(new B(slot));}
+    ValueCountMatchSpy(Xapian::valueno _slot):slot(_slot){m.reset(new B(_slot));}
+    B* getMatchSpy(){return m.get();}
     void __construct(Php::Parameters &params){
-        if(params.size()>0){
-            m.reset(new B(params[0].numericValue()));
-        }
+        m.reset(new B((Xapian::valueno)params[0].numericValue()));
     }
     Php::Value get_description(Php::Parameters &params){return m->get_description();}
     Php::Value get_total(Php::Parameters& params){
@@ -445,7 +453,7 @@ public:
     Php::Value top_values_end(Php::Parameters& params){return Php::Object("XapianTermIterator",new TermIterator(m->top_values_end(params[0].numericValue())));}
     Php::Value name(Php::Parameters& params){return m->name();}
     virtual void    operator() (const Xapian::Document &doc, double wt){
-        (*m)(doc,wt);
+        (*m.get())(doc,wt);
         Php::Array fn({this,"apply"});
         if(fn.isCallable())
             fn(Php::Object("XapianDocument",new Document(doc)), Php::Value(wt));
@@ -453,11 +461,16 @@ public:
     void apply(Php::Parameters & params){
         Xapian::Document * doc=dynamic_cast<Xapian::Document*>(params[0].implementation());
         if(doc) {
-            (*(B*)this)(*doc,params.size()<2 ? 1 : params[1].numericValue());
+            (*m.get())(*doc,params.size()<2 ? 1. : params[1].floatValue());
         }
     }
-    
-    virtual ~ValueCountMatchSpy(){m.reset();}
+    static Php::Value ValueCountMatchSpy_apply(Php::Parameters& params){
+        ValueCountMatchSpy *spy=dynamic_cast<ValueCountMatchSpy*>(params[0].implementation());
+        Xapian::Document*doc=dynamic_cast<Xapian::Document*>(params[1].implementation());
+        double wt = params.size()<3 ? 1. : params[2].floatValue();
+        if(spy && doc) (*spy)(*doc,wt);
+    }
+    virtual ~ValueCountMatchSpy(){}
     static void get_module_part(Php::Extension& extension,Php::Class<::MatchSpy>& cMatchSpy){
         Php::Class<ValueCountMatchSpy> cValueCountMatchSpy("XapianValueCountMatchSpy");
         cValueCountMatchSpy.method<&ValueCountMatchSpy::__construct>("__construct",{Php::ByVal("valueno",Php::Type::Numeric)});
@@ -468,8 +481,9 @@ public:
         cValueCountMatchSpy.method<&ValueCountMatchSpy::top_values_begin>("top_values_begin",{Php::ByVal("maxitems",Php::Type::Numeric)});
         cValueCountMatchSpy.method<&ValueCountMatchSpy::top_values_end>("top_values_end",{Php::ByVal("maxitems",Php::Type::Numeric)});
         cValueCountMatchSpy.method<&ValueCountMatchSpy::name>("name",{});
-        cValueCountMatchSpy.method<&ValueCountMatchSpy::apply>("apply",{Php::ByVal("doc","XapianDocument"),Php::ByVal("wt",Php::Type::Numeric)});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::apply>("apply",{Php::ByVal("doc","XapianDocument"),Php::ByVal("wt",Php::Type::Numeric,false)});
         cValueCountMatchSpy.extends(cMatchSpy);
+        extension.add("ValueCountMatchSpy_apply",ValueCountMatchSpy_apply,{Php::ByVal("spy","XapianValueCountMatchSpy"),Php::ByVal("doc","XapianDocument"),Php::ByVal("wt",Php::Type::Numeric,false)});
         extension.add(std::move(cValueCountMatchSpy));
     }
 };
@@ -795,7 +809,7 @@ public:
             m->add_matchspy(spy0);
         ValueCountMatchSpy* spy1 = dynamic_cast<ValueCountMatchSpy*>(params[0].implementation());
         if(spy1)
-            m->add_matchspy(*spy1);
+            m->add_matchspy(spy1->getMatchSpy());
     }
     void set_sort_by_relevance(Php::Parameters& params){m->set_sort_by_relevance();}
     void set_sort_by_value(Php::Parameters& params){m->set_sort_by_value(params[0].numericValue(),params.size()<2 ? false : params[1].boolValue());}
@@ -911,7 +925,7 @@ extern "C" {
     {
         // static(!) Php::Extension object that should stay in memory
         // for the entire duration of the process (that's why it's static)
-        static Php::Extension extension("xapian", "1.4.0");
+        static Php::Extension extension("xapian", Xapian::version_string());
 
         // @todo    add your own functions, classes, namespaces to the extension
         PhpXapian::get_module_part(extension); 
