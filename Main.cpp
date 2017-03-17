@@ -311,6 +311,7 @@ public:
 };
 
 class MSet: public Php::Base, public Xapian::MSet {
+    typedef Xapian::MSet B;
 public:
     MSet():Xapian::MSet(){}
     MSet(const Xapian::MSet &m):Xapian::MSet(m){}
@@ -319,6 +320,7 @@ public:
     Php::Value get_matches_estimated(Php::Parameters &params){return Php::Value((int32_t)Xapian::MSet::get_matches_estimated());}
     Php::Value begin(Php::Parameters &params){return Php::Object("XapianMSetIterator",new MSetIterator(Xapian::MSet::begin()));}
     Php::Value end(Php::Parameters &params){return Php::Object("XapianMSetIterator",new MSetIterator(Xapian::MSet::end()));}
+    Php::Value is_empty(Php::Parameters& params){return B::empty();}
     virtual ~MSet(){}
     static void get_module_part(Php::Extension& extension){
         Php::Class<MSet> cMSet("XapianMSet");
@@ -327,6 +329,7 @@ public:
         cMSet.method<&MSet::get_matches_estimated>("get_matches_estimated",{});
         cMSet.method<&MSet::begin>("begin",{});
         cMSet.method<&MSet::end>("end",{});
+        cMSet.method<&MSet::is_empty>("is_empty",{});
         extension.add(std::move(cMSet));
     }
 };
@@ -444,7 +447,14 @@ public:
     virtual void    operator() (const Xapian::Document &doc, double wt){
         (*m)(doc,wt);
         Php::Array fn({this,"apply"});
-        fn(Php::Object("XapianDocument",new Document(doc)), Php::Value(wt));
+        if(fn.isCallable())
+            fn(Php::Object("XapianDocument",new Document(doc)), Php::Value(wt));
+    }
+    void apply(Php::Parameters & params){
+        Xapian::Document * doc=dynamic_cast<Xapian::Document*>(params[0].implementation());
+        if(doc) {
+            (*(B*)this)(*doc,params.size()<2 ? 1 : params[1].numericValue());
+        }
     }
     
     virtual ~ValueCountMatchSpy(){m.reset();}
@@ -458,6 +468,7 @@ public:
         cValueCountMatchSpy.method<&ValueCountMatchSpy::top_values_begin>("top_values_begin",{Php::ByVal("maxitems",Php::Type::Numeric)});
         cValueCountMatchSpy.method<&ValueCountMatchSpy::top_values_end>("top_values_end",{Php::ByVal("maxitems",Php::Type::Numeric)});
         cValueCountMatchSpy.method<&ValueCountMatchSpy::name>("name",{});
+        cValueCountMatchSpy.method<&ValueCountMatchSpy::apply>("apply",{Php::ByVal("doc","XapianDocument"),Php::ByVal("wt",Php::Type::Numeric)});
         cValueCountMatchSpy.extends(cMatchSpy);
         extension.add(std::move(cValueCountMatchSpy));
     }
