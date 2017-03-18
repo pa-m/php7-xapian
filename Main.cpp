@@ -13,7 +13,18 @@ public:
     }
 };
 
-class BM25Weight: public Php::Base {
+class Weight: public Php::Base {
+    typedef Xapian::Weight B;
+public:
+    virtual Xapian::Weight*getWeight() {return NULL;}
+    static Php::Class<Weight> get_module_part(Php::Extension& extension){
+        Php::Class<Weight> cWeight("XapianWeight");
+        extension.add(std::move(cWeight));
+        return cWeight;
+    }
+};
+
+class BM25Weight: public Weight {
     typedef Xapian::BM25Weight B;
     std::shared_ptr<B> m;
 public:
@@ -21,15 +32,15 @@ public:
     BM25Weight(double k1,double k2,double k3,double b,double min_normlen){m.reset(new B(k1,k2,k3,b,min_normlen));}
     BM25Weight(const BM25Weight&other){m=other.m;}
     virtual ~BM25Weight(){m.reset();}
-    operator B&(){return *m;}
+    virtual Xapian::Weight*getWeight(){return m.get();}
     void __construct(Php::Parameters &params) {
         *this=BM25Weight((double)params[0],(double)params[1],(double)params[2],(double)params[3],(double)params[4]);
     }
-    static void get_module_part(Php::Extension& extension){
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
         Php::Class<BM25Weight> cBM25Weight("XapianBM25Weight");
         cBM25Weight.method<&BM25Weight::__construct>("__construct",{Php::ByVal("k1",Php::Type::Float),Php::ByVal("k2",Php::Type::Float),Php::ByVal("k3",Php::Type::Float),Php::ByVal("b",Php::Type::Float),Php::ByVal("min_normlen",Php::Type::Float),});
+        cBM25Weight.extends(cWeight);
         extension.add(std::move(cBM25Weight));
-
     }
 };
 
@@ -142,8 +153,8 @@ public:
 class Stopper: public Php::Base, public Xapian::Stopper {
     typedef Xapian::Stopper B;
 public:
-    Stopper():Xapian::Stopper(){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::Stopper::get_description();}
+    Stopper():B(){}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
     Php::Value apply(Php::Parameters &params){
         B& b=*static_cast<B*>(this);
         return b(params[0].stringValue());
@@ -160,9 +171,9 @@ public:
 class SimpleStopper: public Php::Base, public Xapian::SimpleStopper {
     typedef Xapian::SimpleStopper B;
 public:
-    SimpleStopper():Xapian::SimpleStopper(){}
+    SimpleStopper():B(){}
     //SimpleStopper(Php::Array words):Xapian::SimpleStopper(words.begin(),words.end()){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::SimpleStopper::get_description();}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
     void add(Php::Parameters& params){B::add(params[0]);}
     Php::Value apply(Php::Parameters &params){
         B& b=*static_cast<B*>(this);
@@ -408,15 +419,16 @@ public:
     Parameters(Php::Base*object):Php::Parameters(object){}
 };
 
-class MatchSpy: public Php::Base, public Xapian::MatchSpy {
+class MatchSpy: public Php::Base {
 public:
     
-    MatchSpy():Xapian::MatchSpy(){
+    MatchSpy(){
         
     }
     //MatchSpy(const Xapian::MatchSpy& e):Xapian::MatchSpy(e){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::MatchSpy::get_description();}
+    Php::Value get_description(Php::Parameters &params){return "MatchSpy";}
     virtual ~MatchSpy(){}
+    virtual Xapian::MatchSpy*getMatchSpy() {return NULL;}
     void __construct(Php::Parameters &params){}
     void apply(Php::Parameters &params){}
     virtual void    operator() (const Xapian::Document &doc, double wt){
@@ -433,14 +445,15 @@ public:
     }
 };
 
-class ValueCountMatchSpy: public Php::Base {
+class ValueCountMatchSpy: public MatchSpy {
     typedef Xapian::ValueCountMatchSpy B;
     Xapian::valueno slot;
     std::shared_ptr<B> m;
 public:
     ValueCountMatchSpy():slot(Xapian::BAD_VALUENO){m.reset(new B(slot));}
     ValueCountMatchSpy(Xapian::valueno _slot):slot(_slot){m.reset(new B(_slot));}
-    B* getMatchSpy(){return m.get();}
+    virtual ~ValueCountMatchSpy(){m.reset();}
+    virtual Xapian::MatchSpy*getMatchSpy() {return m.get();}
     void __construct(Php::Parameters &params){
         m.reset(new B((Xapian::valueno)params[0].numericValue()));
     }
@@ -464,13 +477,13 @@ public:
             (*m.get())(*doc,params.size()<2 ? 1. : params[1].floatValue());
         }
     }
-    static Php::Value ValueCountMatchSpy_apply(Php::Parameters& params){
+    static void ValueCountMatchSpy_apply(Php::Parameters& params){
         ValueCountMatchSpy *spy=dynamic_cast<ValueCountMatchSpy*>(params[0].implementation());
         Xapian::Document*doc=dynamic_cast<Xapian::Document*>(params[1].implementation());
         double wt = params.size()<3 ? 1. : params[2].floatValue();
         if(spy && doc) (*spy)(*doc,wt);
     }
-    virtual ~ValueCountMatchSpy(){}
+
     static void get_module_part(Php::Extension& extension,Php::Class<::MatchSpy>& cMatchSpy){
         Php::Class<ValueCountMatchSpy> cValueCountMatchSpy("XapianValueCountMatchSpy");
         cValueCountMatchSpy.method<&ValueCountMatchSpy::__construct>("__construct",{Php::ByVal("valueno",Php::Type::Numeric)});
@@ -805,11 +818,13 @@ public:
     }
     void add_matchspy(Php::Parameters& params){
         MatchSpy* spy0 = dynamic_cast<MatchSpy*>(params[0].implementation());
-        if(spy0)
-            m->add_matchspy(spy0);
-        ValueCountMatchSpy* spy1 = dynamic_cast<ValueCountMatchSpy*>(params[0].implementation());
+        if(spy0) {
+            m->add_matchspy(spy0->getMatchSpy());
+            return;
+        }
+        /*ValueCountMatchSpy* spy1 = dynamic_cast<ValueCountMatchSpy*>(params[0].implementation());
         if(spy1)
-            m->add_matchspy(spy1->getMatchSpy());
+            m->add_matchspy(spy1->getMatchSpy());*/
     }
     void set_sort_by_relevance(Php::Parameters& params){m->set_sort_by_relevance();}
     void set_sort_by_value(Php::Parameters& params){m->set_sort_by_value(params[0].numericValue(),params.size()<2 ? false : params[1].boolValue());}
@@ -835,8 +850,8 @@ ESet    get_eset (Xapian::termcount maxitems, const RSet &rset, int flags, doubl
         return Php::Object("XapianESet",new ESet(m->get_eset(maxitems,*(Xapian::RSet*)omrset,flags,edecider,min_wt)));
     }
     void set_weighting_scheme(Php::Parameters & params){
-        BM25Weight * w = dynamic_cast<BM25Weight*>(params[0].implementation());
-        if(w) m->set_weighting_scheme(*w);
+        Weight * w = dynamic_cast<Weight*>(params[0].implementation());
+        if(w) m->set_weighting_scheme(*w->getWeight());
     }
     static void get_module_part(Php::Extension& extension){
         Php::Class<Enquire> cEnquire("XapianEnquire");
@@ -930,7 +945,8 @@ extern "C" {
         // @todo    add your own functions, classes, namespaces to the extension
         PhpXapian::get_module_part(extension); 
         Error::get_module_part(extension);
-        BM25Weight::get_module_part(extension);
+        Php::Class<Weight> cWeight = Weight::get_module_part(extension);
+        BM25Weight::get_module_part(extension, cWeight);
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
         ValueIterator::get_module_part(extension);
