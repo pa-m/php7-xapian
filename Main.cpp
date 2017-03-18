@@ -38,9 +38,68 @@ public:
     }
     static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
         Php::Class<BM25Weight> cBM25Weight("XapianBM25Weight");
-        cBM25Weight.method<&BM25Weight::__construct>("__construct",{Php::ByVal("k1",Php::Type::Float),Php::ByVal("k2",Php::Type::Float),Php::ByVal("k3",Php::Type::Float),Php::ByVal("b",Php::Type::Float),Php::ByVal("min_normlen",Php::Type::Float),});
+        cBM25Weight.method<&BM25Weight::__construct>("__construct",{Php::ByVal("k1",Php::Type::Float),Php::ByVal("k2",Php::Type::Float),Php::ByVal("k3",Php::Type::Float),Php::ByVal("b",Php::Type::Float),Php::ByVal("min_normlen",Php::Type::Float)});
         cBM25Weight.extends(cWeight);
         extension.add(std::move(cBM25Weight));
+    }
+};
+
+class BM25PlusWeight: public Weight {
+    typedef Xapian::BM25PlusWeight B;
+    std::shared_ptr<B> m;
+public:
+    BM25PlusWeight(){m.reset(new B(1.,0.,1.,0.5,0.5,1.));}
+    BM25PlusWeight(double k1,double k2,double k3,double b,double min_normlen,double delta){m.reset(new B(k1,k2,k3,b,min_normlen,delta));}
+    BM25PlusWeight(const BM25PlusWeight&other){m=other.m;}
+    virtual ~BM25PlusWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=BM25PlusWeight((double)params[0],(double)params[1],(double)params[2],(double)params[3],(double)params[4],(double)params[5]);
+    }
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<BM25PlusWeight> cBM25PlusWeight("XapianBM25PlusWeight");
+        cBM25PlusWeight.method<&BM25PlusWeight::__construct>("__construct",{Php::ByVal("k1",Php::Type::Float),Php::ByVal("k2",Php::Type::Float),Php::ByVal("k3",Php::Type::Float),Php::ByVal("b",Php::Type::Float),Php::ByVal("min_normlen",Php::Type::Float),Php::ByVal("delta",Php::Type::Float)});
+        cBM25PlusWeight.extends(cWeight);
+        extension.add(std::move(cBM25PlusWeight));
+    }
+};
+
+class BoolWeight: public Weight {
+    typedef Xapian::BoolWeight B;
+    std::shared_ptr<B> m;
+public:
+    BoolWeight(){m.reset(new B());}
+    BoolWeight(const BoolWeight&other){m=other.m;}
+    virtual ~BoolWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=BoolWeight();
+    }
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<BoolWeight> cBoolWeight("XapianBoolWeight");
+        cBoolWeight.method<&BoolWeight::__construct>("__construct",{});
+        cBoolWeight.extends(cWeight);
+        extension.add(std::move(cBoolWeight));
+    }
+};
+
+class TradWeight: public Weight {
+    typedef Xapian::TradWeight B;
+    std::shared_ptr<B> m;
+public:
+    TradWeight(){m.reset(new B(1.));}
+    TradWeight(double k){m.reset(new B(k));}
+    TradWeight(const TradWeight&other){m=other.m;}
+    virtual ~TradWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=TradWeight((double)params[0]);
+    }
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<TradWeight> cTradWeight("XapianTradWeight");
+        cTradWeight.method<&TradWeight::__construct>("__construct",{Php::ByVal("k",Php::Type::Float)});
+        cTradWeight.extends(cWeight);
+        extension.add(std::move(cTradWeight));
     }
 };
 
@@ -540,9 +599,31 @@ public:
         B::add_database(*db);
     }
     Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
+    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
     Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
     Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+    Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
+    Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
+    Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
+    Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
+    Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
+    Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
+    Php::Value synonyms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_end(params[0].stringValue())));}
+    Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
+    Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
+    Php::Value synonym_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_begin(params[0].stringValue())));}
     Php::Value get_metadata(Php::Parameters &params){return B::get_metadata(params[0].stringValue());}
+    void compact(Php::Parameters & params) {
+        Xapian::Compactor c;
+        B::compact(
+            params[0].stringValue(),
+            params.size()<2 ? 0 : params[1].numericValue(),
+            params.size()<3 ? 0 : params[2].numericValue(),
+            params.size()<4 ? c : *dynamic_cast<Xapian::Compactor*>(params[3].implementation())
+            );
+    }
+
     virtual ~Database(){}
     static Php::Class<Database>  get_module_part(Php::Extension& extension){
         Php::Class<Database> cDatabase("XapianDatabase");
@@ -551,9 +632,22 @@ public:
         cDatabase.method<&Database::get_doccount>("get_doccount");
         cDatabase.method<&Database::add_database>("add_database");
         cDatabase.method<&Database::get_description>("get_description",{});
+        cDatabase.method<&Database::get_uuid>("get_uuid",{});
+        cDatabase.method<&Database::get_revision>("get_revision",{});
         cDatabase.method<&Database::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::termlist_end>("termlist_end",{Php::ByVal("value",Php::Type::Numeric)});
+        cDatabase.method<&Database::termlist_begin>("termlist_begin",{Php::ByVal("value",Php::Type::Numeric)});
+        cDatabase.method<&Database::allterms_end>("allterms_end",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::allterms_begin>("allterms_begin",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::spellings_end>("spellings_end",{});
+        cDatabase.method<&Database::spellings_begin>("spellings_begin",{});
+        cDatabase.method<&Database::synonyms_end>("synonyms_end",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::synonyms_begin>("synonyms_begin",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::synonym_keys_end>("synonym_keys_end",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::synonym_keys_begin>("synonym_keys_begin",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::get_metadata>("get_metadata",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::compact>("compact",{Php::ByVal("destdir",Php::Type::String)});
         extension.add(std::move(cDatabase));
         return cDatabase;
     }
@@ -583,9 +677,23 @@ public:
     void close(Php::Parameters &params){ B::close();}
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
     Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
+    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
     void add_document(Php::Parameters &params){B::add_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));}
     Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
     Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+
+    Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
+    Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
+    Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
+    Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
+    Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
+    Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
+    Php::Value synonyms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_end(params[0].stringValue())));}
+    Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
+    Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
+    Php::Value synonym_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_begin(params[0].stringValue())));}
+
     Php::Value get_metadata(Php::Parameters &params){return (B::get_metadata(params[0].stringValue()));}
     void set_metadata(Php::Parameters & params){B::set_metadata(params[0].stringValue(),params[1].stringValue());}
     Php::Value replace_document(Php::Parameters &params){
@@ -601,10 +709,21 @@ public:
             B::delete_document(params[0].stringValue());
         }catch(Xapian::DocNotFoundError e){}
     }
+    void compact(Php::Parameters & params) {
+        Xapian::Compactor c;
+        B::compact(
+            params[0].stringValue(),
+            params.size()<2 ? 0 : params[1].numericValue(),
+            params.size()<3 ? 0 : params[2].numericValue(),
+            params.size()<4 ? c : *dynamic_cast<Xapian::Compactor*>(params[3].implementation())
+            );
+    }
     static void get_module_part(Php::Extension& extension,Php::Class<::Database>& cDatabase){
         Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
         cWritableDatabase.method<&WritableDatabase::__construct>("__construct");
         cWritableDatabase.method<&WritableDatabase::get_description>("get_description");
+        cWritableDatabase.method<&WritableDatabase::get_uuid>("get_uuid",{});
+        cWritableDatabase.method<&WritableDatabase::get_revision>("get_revision",{});
         cWritableDatabase.method<&WritableDatabase::begin_transaction>("begin_transaction");
         cWritableDatabase.method<&WritableDatabase::cancel_transaction>("cancel_transaction");
         cWritableDatabase.method<&WritableDatabase::commit_transaction>("commit_transaction");
@@ -614,10 +733,21 @@ public:
         cWritableDatabase.method<&WritableDatabase::add_document>("add_document");
         cWritableDatabase.method<&WritableDatabase::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::termlist_end>("termlist_end",{Php::ByVal("value",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::termlist_begin>("termlist_begin",{Php::ByVal("value",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::allterms_end>("allterms_end",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::allterms_begin>("allterms_begin",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::spellings_end>("spellings_end",{});
+        cWritableDatabase.method<&WritableDatabase::spellings_begin>("spellings_begin",{});
+        cWritableDatabase.method<&WritableDatabase::synonyms_end>("synonyms_end",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::synonyms_begin>("synonyms_begin",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::synonym_keys_end>("synonym_keys_end",{Php::ByVal("value",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::synonym_keys_begin>("synonym_keys_begin",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::get_metadata>("get_metadata",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::set_metadata>("set_metadata",{Php::ByVal("key",Php::Type::String),Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::replace_document>("replace_document",{Php::ByVal("docIdOrUniqueTerm"),Php::ByVal("doc","XapianDocument")});
         cWritableDatabase.method<&WritableDatabase::delete_document>("delete_document",{Php::ByVal("docIdOrUniqueTerm")});
+        cWritableDatabase.method<&WritableDatabase::compact>("compact",{Php::ByVal("destdir",Php::Type::String)});
         cWritableDatabase.extends(cDatabase);
         extension.add(std::move(cWritableDatabase));
     }
@@ -947,6 +1077,9 @@ extern "C" {
         Error::get_module_part(extension);
         Php::Class<Weight> cWeight = Weight::get_module_part(extension);
         BM25Weight::get_module_part(extension, cWeight);
+        BM25PlusWeight::get_module_part(extension, cWeight);
+        BoolWeight::get_module_part(extension, cWeight);
+        TradWeight::get_module_part(extension, cWeight);
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
         ValueIterator::get_module_part(extension);
