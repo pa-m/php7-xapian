@@ -103,6 +103,45 @@ public:
     }
 };
 
+class BB2Weight: public Weight {
+    typedef Xapian::BB2Weight B;
+    std::shared_ptr<B> m;
+public:
+    BB2Weight(){m.reset(new B(1.));}
+    BB2Weight(double k){m.reset(new B(k));}
+    BB2Weight(const BB2Weight&other){m=other.m;}
+    virtual ~BB2Weight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=BB2Weight((double)params[0]);
+    }
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<BB2Weight> cBB2Weight("XapianBB2Weight");
+        cBB2Weight.method<&BB2Weight::__construct>("__construct",{Php::ByVal("k",Php::Type::Float)});
+        cBB2Weight.extends(cWeight);
+        extension.add(std::move(cBB2Weight));
+    }
+};
+
+class CoordWeight: public Weight {
+    typedef Xapian::CoordWeight B;
+    std::shared_ptr<B> m;
+public:
+    CoordWeight(){m.reset(new B());}
+    CoordWeight(const CoordWeight&other){m=other.m;}
+    virtual ~CoordWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=CoordWeight();
+    }
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<CoordWeight> cCoordWeight("XapianCoordWeight");
+        cCoordWeight.method<&CoordWeight::__construct>("__construct",{});
+        cCoordWeight.extends(cWeight);
+        extension.add(std::move(cCoordWeight));
+    }
+};
+
 class Compactor: public Php::Base {
     typedef Xapian::Compactor B;
     std::shared_ptr<Xapian::Compactor> m;
@@ -593,7 +632,27 @@ public:
         *this = B(params[0].stringValue(),params.size()<2 ? 0 : params[1].numericValue());
     }
     void close(Php::Parameters &params){ B::close();}
+    Php::Value has_positions(Php::Parameters &params){ return B::has_positions();}
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
+    Php::Value get_lastdocid(Php::Parameters &params){ return (int64_t)B::get_lastdocid();}
+    Php::Value get_avlength(Php::Parameters &params){ return (int32_t)B::get_avlength();}
+    Php::Value get_termfreq(Php::Parameters &params){ return (int32_t)B::get_termfreq(params[0].stringValue());}
+    Php::Value term_exists(Php::Parameters &params){ return B::term_exists(params[0].stringValue());}
+    Php::Value get_collection_freq(Php::Parameters &params){ return (int32_t)B::get_collection_freq(params[0].stringValue());}
+    Php::Value get_value_freq(Php::Parameters &params){ return (int32_t)B::get_value_freq(params[0].numericValue());}
+    Php::Value get_value_lower_bound(Php::Parameters &params){ return B::get_value_lower_bound(params[0].numericValue());}
+    Php::Value get_value_upper_bound(Php::Parameters &params){ return B::get_value_upper_bound(params[0].numericValue());}
+    Php::Value get_doclength_lower_bound(Php::Parameters &params){ return (int32_t)B::get_doclength_lower_bound();}
+    Php::Value get_doclength_upper_bound(Php::Parameters &params){ return (int32_t)B::get_doclength_upper_bound();}
+    Php::Value get_wdf_upper_bound(Php::Parameters &params){ return (int32_t)B::get_wdf_upper_bound(params[0].stringValue());}
+    Php::Value valuestream_begin(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::valuestream_begin(params[0].numericValue())));}
+    Php::Value valuestream_end(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::valuestream_end(params[0].numericValue())));}
+    Php::Value get_doclength(Php::Parameters &params){return (int32_t)B::get_doclength(params[0].numericValue());}
+    Php::Value get_unique_terms(Php::Parameters &params){return (int32_t)B::get_unique_terms(params[0].numericValue());}
+    Php::Value get_document(Php::Parameters &params){return Php::Object("XapianDocument",new Document(B::get_document(params[0].numericValue(), params.size()<2 ? 0 : params[1].numericValue())));}
+    Php::Value get_spelling_suggestion(Php::Parameters &params){return B::get_spelling_suggestion(params[0].stringValue(), params.size()<2 ? 2 : params[1].numericValue());}
+    Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
+    Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
     void add_database(Php::Parameters &params){
         Database*db=dynamic_cast<Database*>(params[0].implementation());
         B::add_database(*db);
@@ -607,8 +666,6 @@ public:
     Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
     Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
     Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
-    Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
-    Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
     Php::Value synonyms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_end(params[0].stringValue())));}
     Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
     Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
@@ -623,13 +680,31 @@ public:
             params.size()<4 ? c : *dynamic_cast<Xapian::Compactor*>(params[3].implementation())
             );
     }
-
+    Php::Value reopen(Php::Parameters &params){return B::reopen();}
     virtual ~Database(){}
     static Php::Class<Database>  get_module_part(Php::Extension& extension){
         Php::Class<Database> cDatabase("XapianDatabase");
         cDatabase.method<&Database::__construct>("__construct",{Php::ByVal("enquireOrDatabase")});
-        cDatabase.method<&Database::close>("close");
-        cDatabase.method<&Database::get_doccount>("get_doccount");
+        cDatabase.method<&Database::close>("close",{});
+        cDatabase.method<&Database::has_positions>("has_positions",{});
+        cDatabase.method<&Database::get_doccount>("get_doccount",{});
+        cDatabase.method<&Database::get_lastdocid>("get_lastdocid",{});
+        cDatabase.method<&Database::get_avlength>("get_avlength",{});
+        cDatabase.method<&Database::get_termfreq>("get_termfreq",{Php::ByVal("term",Php::Type::String)});
+        cDatabase.method<&Database::term_exists>("term_exists",{Php::ByVal("term",Php::Type::String)});
+        cDatabase.method<&Database::get_collection_freq>("get_collection_freq",{Php::ByVal("term",Php::Type::String)});
+        cDatabase.method<&Database::get_value_freq>("get_value_freq",{Php::ByVal("term",Php::Type::Numeric)});
+        cDatabase.method<&Database::get_value_lower_bound>("get_value_lower_bound",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDatabase.method<&Database::get_value_upper_bound>("get_value_upper_bound",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDatabase.method<&Database::get_doclength_lower_bound>("get_doclength_lower_bound",{});
+        cDatabase.method<&Database::get_doclength_upper_bound>("get_doclength_upper_bound",{});
+        cDatabase.method<&Database::get_wdf_upper_bound>("get_wdf_upper_bound",{Php::ByVal("term",Php::Type::String)});
+        cDatabase.method<&Database::valuestream_begin>("valuestream_begin",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDatabase.method<&Database::valuestream_end>("valuestream_end",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDatabase.method<&Database::get_doclength>("get_doclength",{Php::ByVal("did",Php::Type::Numeric)});
+        cDatabase.method<&Database::get_unique_terms>("get_unique_terms",{Php::ByVal("did",Php::Type::Numeric)});
+        cDatabase.method<&Database::get_document>("get_document",{Php::ByVal("did",Php::Type::Numeric),{Php::ByVal("flags",Php::Type::Numeric,false)}});
+        cDatabase.method<&Database::get_spelling_suggestion>("get_spelling_suggestion",{Php::ByVal("word",Php::Type::String),Php::ByVal("max_edit_distance",Php::Type::Numeric,false)});
         cDatabase.method<&Database::add_database>("add_database");
         cDatabase.method<&Database::get_description>("get_description",{});
         cDatabase.method<&Database::get_uuid>("get_uuid",{});
@@ -648,6 +723,7 @@ public:
         cDatabase.method<&Database::synonym_keys_begin>("synonym_keys_begin",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::get_metadata>("get_metadata",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::compact>("compact",{Php::ByVal("destdir",Php::Type::String)});
+        cDatabase.method<&Database::reopen>("reopen",{});
         extension.add(std::move(cDatabase));
         return cDatabase;
     }
@@ -675,7 +751,27 @@ public:
     void commit_transaction(Php::Parameters &params){ B::commit_transaction();}
     void commit(Php::Parameters &params){ B::commit();}
     void close(Php::Parameters &params){ B::close();}
+    Php::Value has_positions(Php::Parameters &params){ return B::has_positions();}
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
+    Php::Value get_lastdocid(Php::Parameters &params){ return (int64_t)B::get_lastdocid();}
+    Php::Value get_avlength(Php::Parameters &params){ return (int32_t)B::get_avlength();}
+    Php::Value get_termfreq(Php::Parameters &params){ return (int32_t)B::get_termfreq(params[0].stringValue());}
+    Php::Value term_exists(Php::Parameters &params){ return B::term_exists(params[0].stringValue());}
+    Php::Value get_collection_freq(Php::Parameters &params){ return (int32_t)B::get_collection_freq(params[0].stringValue());}
+    Php::Value get_value_freq(Php::Parameters &params){ return (int32_t)B::get_value_freq(params[0].numericValue());}
+    Php::Value get_value_lower_bound(Php::Parameters &params){ return B::get_value_lower_bound(params[0].numericValue());}
+    Php::Value get_value_upper_bound(Php::Parameters &params){ return B::get_value_upper_bound(params[0].numericValue());}
+    Php::Value get_doclength_lower_bound(Php::Parameters &params){ return (int32_t)B::get_doclength_lower_bound();}
+    Php::Value get_doclength_upper_bound(Php::Parameters &params){ return (int32_t)B::get_doclength_upper_bound();}
+    Php::Value get_wdf_upper_bound(Php::Parameters &params){ return (int32_t)B::get_wdf_upper_bound(params[0].stringValue());}
+    Php::Value valuestream_begin(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::valuestream_begin(params[0].numericValue())));}
+    Php::Value valuestream_end(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::valuestream_end(params[0].numericValue())));}
+    Php::Value get_doclength(Php::Parameters &params){return (int32_t)B::get_doclength(params[0].numericValue());}
+    Php::Value get_unique_terms(Php::Parameters &params){return (int32_t)B::get_unique_terms(params[0].numericValue());}
+    Php::Value get_document(Php::Parameters &params){return Php::Object("XapianDocument",new Document(B::get_document(params[0].numericValue(), params.size()<2 ? 0 : params[1].numericValue())));}
+    Php::Value get_spelling_suggestion(Php::Parameters &params){return B::get_spelling_suggestion(params[0].stringValue(), params.size()<2 ? 2 : params[1].numericValue());}
+    Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
+    Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
     Php::Value get_description(Php::Parameters &params){return B::get_description();}
     Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
     Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
@@ -687,8 +783,6 @@ public:
     Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
     Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
     Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
-    Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
-    Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
     Php::Value synonyms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_end(params[0].stringValue())));}
     Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
     Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
@@ -718,6 +812,7 @@ public:
             params.size()<4 ? c : *dynamic_cast<Xapian::Compactor*>(params[3].implementation())
             );
     }
+    Php::Value reopen(Php::Parameters &params){return B::reopen();}
     static void get_module_part(Php::Extension& extension,Php::Class<::Database>& cDatabase){
         Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
         cWritableDatabase.method<&WritableDatabase::__construct>("__construct");
@@ -729,8 +824,26 @@ public:
         cWritableDatabase.method<&WritableDatabase::commit_transaction>("commit_transaction");
         cWritableDatabase.method<&WritableDatabase::commit>("commit");
         cWritableDatabase.method<&WritableDatabase::close>("close");
-        cWritableDatabase.method<&WritableDatabase::get_doccount>("get_doccount");
-        cWritableDatabase.method<&WritableDatabase::add_document>("add_document");
+        cWritableDatabase.method<&WritableDatabase::has_positions>("has_positions",{});
+        cWritableDatabase.method<&WritableDatabase::get_doccount>("get_doccount",{});
+        cWritableDatabase.method<&WritableDatabase::get_lastdocid>("get_lastdocid",{});
+        cWritableDatabase.method<&WritableDatabase::get_avlength>("get_avlength",{});
+        cWritableDatabase.method<&WritableDatabase::get_termfreq>("get_termfreq",{Php::ByVal("term",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::term_exists>("term_exists",{Php::ByVal("term",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::get_collection_freq>("get_collection_freq",{Php::ByVal("term",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::get_value_freq>("get_value_freq",{Php::ByVal("term",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::get_value_lower_bound>("get_value_lower_bound",{Php::ByVal("slot",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::get_value_upper_bound>("get_value_upper_bound",{Php::ByVal("slot",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::get_doclength_lower_bound>("get_doclength_lower_bound",{});
+        cWritableDatabase.method<&WritableDatabase::get_doclength_upper_bound>("get_doclength_upper_bound",{});
+        cWritableDatabase.method<&WritableDatabase::get_wdf_upper_bound>("get_wdf_upper_bound",{Php::ByVal("term",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::valuestream_begin>("valuestream_begin",{Php::ByVal("slot",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::valuestream_end>("valuestream_end",{Php::ByVal("slot",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::get_doclength>("get_doclength",{Php::ByVal("did",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::get_unique_terms>("get_unique_terms",{Php::ByVal("did",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::get_document>("get_document",{Php::ByVal("did",Php::Type::Numeric),Php::ByVal("flags",Php::Type::Numeric,false)});
+        cWritableDatabase.method<&WritableDatabase::get_spelling_suggestion>("get_spelling_suggestion",{Php::ByVal("word",Php::Type::String),Php::ByVal("max_edit_distance",Php::Type::Numeric,false)});
+        cWritableDatabase.method<&WritableDatabase::add_document>("add_document",{Php::ByVal("doc","XapianDocument")});
         cWritableDatabase.method<&WritableDatabase::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::termlist_end>("termlist_end",{Php::ByVal("value",Php::Type::Numeric)});
@@ -748,6 +861,7 @@ public:
         cWritableDatabase.method<&WritableDatabase::replace_document>("replace_document",{Php::ByVal("docIdOrUniqueTerm"),Php::ByVal("doc","XapianDocument")});
         cWritableDatabase.method<&WritableDatabase::delete_document>("delete_document",{Php::ByVal("docIdOrUniqueTerm")});
         cWritableDatabase.method<&WritableDatabase::compact>("compact",{Php::ByVal("destdir",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::reopen>("reopen",{});
         cWritableDatabase.extends(cDatabase);
         extension.add(std::move(cWritableDatabase));
     }
@@ -1080,6 +1194,8 @@ extern "C" {
         BM25PlusWeight::get_module_part(extension, cWeight);
         BoolWeight::get_module_part(extension, cWeight);
         TradWeight::get_module_part(extension, cWeight);
+        BB2Weight::get_module_part(extension, cWeight);
+        CoordWeight::get_module_part(extension, cWeight);
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
         ValueIterator::get_module_part(extension);
