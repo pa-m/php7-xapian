@@ -230,6 +230,69 @@ public:
         extension.add(std::move(cValueIterator));
     }
 };
+
+class PositionIterator: public Php::Base, public Xapian::PositionIterator {
+    typedef Xapian::PositionIterator B;
+public:
+    PositionIterator():Xapian::PositionIterator(){}
+    PositionIterator(const B& i):B(i){}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value get_termpos(Php::Parameters &params){return (int32_t)**this; }
+    void skip_to(Php::Parameters &params){B::skip_to(params[0].numericValue());}
+    void next(Php::Parameters& params){(*static_cast<B*>(this))++;}
+    Php::Value equals(Php::Parameters& params){
+        PositionIterator *other=dynamic_cast<PositionIterator*>(params[0].implementation());
+        return *static_cast<B*>(this)==*static_cast<B*>(other);
+    }
+
+    virtual ~PositionIterator(){}
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<PositionIterator> cPositionIterator("XapianPositionIterator");
+        cPositionIterator.method<&PositionIterator::get_description>("get_description",{});
+        cPositionIterator.method<&PositionIterator::get_termpos>("get_termpos",{});
+        cPositionIterator.method<&PositionIterator::skip_to>("skip_to",{Php::ByVal("termpos",Php::Type::Numeric)});
+        cPositionIterator.method<&PositionIterator::next>("next",{});
+        cPositionIterator.method<&PositionIterator::equals>("equals",{Php::ByVal("other","XapianPositionIterator")});
+        extension.add(std::move(cPositionIterator));
+    }
+};
+
+class PostingIterator: public Php::Base, public Xapian::PostingIterator {
+    typedef Xapian::PostingIterator B;
+public:
+    PostingIterator():Xapian::PostingIterator(){}
+    PostingIterator(const B& i):B(i){}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value get_docid(Php::Parameters &params){return (int32_t)**this; }
+    Php::Value get_wdf(Php::Parameters &params){return (int32_t)B::get_wdf(); }
+    Php::Value get_doclength(Php::Parameters &params){return (int32_t)B::get_doclength(); }
+    Php::Value get_unique_terms(Php::Parameters &params){return (int32_t)B::get_unique_terms(); }
+    Php::Value positionlist_begin(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_begin()));}
+    Php::Value positionlist_end(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_end()));}
+    void skip_to(Php::Parameters &params){B::skip_to(params[0].numericValue());}
+    void next(Php::Parameters& params){(*static_cast<B*>(this))++;}
+    Php::Value equals(Php::Parameters& params){
+        PostingIterator *other=dynamic_cast<PostingIterator*>(params[0].implementation());
+        return *static_cast<B*>(this)==*static_cast<B*>(other);
+    }
+
+    virtual ~PostingIterator(){}
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<PostingIterator> cPostingIterator("XapianPostingIterator");
+        cPostingIterator.method<&PostingIterator::get_description>("get_description",{});
+        cPostingIterator.method<&PostingIterator::get_docid>("get_docid",{});
+        cPostingIterator.method<&PostingIterator::get_wdf>("get_wdf",{});
+        cPostingIterator.method<&PostingIterator::get_doclength>("get_doclength",{});
+        cPostingIterator.method<&PostingIterator::get_unique_terms>("get_unique_terms",{});
+        cPostingIterator.method<&PostingIterator::positionlist_begin>("positionlist_begin",{});
+        cPostingIterator.method<&PostingIterator::positionlist_end>("positionlist_end",{});
+        cPostingIterator.method<&PostingIterator::skip_to>("skip_to",{Php::ByVal("did",Php::Type::Numeric)});
+        cPostingIterator.method<&PostingIterator::next>("next",{});
+        cPostingIterator.method<&PostingIterator::equals>("equals",{Php::ByVal("other","XapianPostingIterator")});
+        extension.add(std::move(cPostingIterator));
+    }
+};
+
 class Stem: public Php::Base {
     Xapian::Stem m;
 public:
@@ -339,16 +402,12 @@ class Document: public Php::Base, public Xapian::Document {
 public:
     Document():Xapian::Document(){}
     Document(const Xapian::Document&d):Xapian::Document(d){}
-    Php::Value get_description(Php::Parameters &params){return Xapian::Document::get_description();}
-    void add_value(Php::Parameters &params){
-        B::add_value(params[0].numericValue(),params[1].stringValue());
-    }
+    void __construct(Php::Parameters &params){*this=params.size()==0? B():*(B*)params[0].implementation();}
     Php::Value get_value(Php::Parameters& params) {
         return Php::Value(B::get_value(params[0].numericValue()));
     }
-    static Php::Value Document_get_value(Php::Parameters& params){
-        B*doc = dynamic_cast<B*>(params[0].implementation());
-        return doc ? doc->get_value(params[1].numericValue()):"";
+    void add_value(Php::Parameters &params){
+        B::add_value(params[0].numericValue(),params[1].stringValue());
     }
     void remove_value(Php::Parameters& params) {
         B::remove_value(params[0].numericValue());
@@ -356,38 +415,54 @@ public:
     void clear_values(Php::Parameters& params){
         B::clear_values();
     }
-    void set_data(Php::Parameters &params){B::set_data(params[0]);}
     Php::Value get_data(Php::Parameters &params){return B::get_data();}
+    void set_data(Php::Parameters &params){B::set_data(params[0]);}
+    void add_posting(Php::Parameters &params){B::add_posting(params[0].stringValue(),params[1].numericValue(),params.size()<3 ? 1 : params[2].numericValue());}
+    void add_term(Php::Parameters &params){B::add_term(params[0].stringValue(),params.size()<2 ? 1 : params[1].numericValue());}
+    void add_boolean_term(Php::Parameters &params){B::add_boolean_term(params[0].stringValue());}
+    void remove_posting(Php::Parameters &params){B::remove_posting(params[0].stringValue(),params[1].numericValue(),params.size()<3 ? 1 : params[2].numericValue());}
+    void remove_term(Php::Parameters &params){B::remove_term(params[0].stringValue());}
+    void clear_terms(Php::Parameters &params){B::clear_terms();}
     Php::Value termlist_count(Php::Parameters &params){return (int32_t)B::termlist_count();}
     Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin()));}
     Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end()));}
     Php::Value values_count(Php::Parameters &params){return (int32_t)B::values_count();}
     Php::Value values_begin(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::values_begin()));}
     Php::Value values_end(Php::Parameters &params){return Php::Object("XapianValueIterator",new ValueIterator(B::values_end()));}
-    void add_term(Php::Parameters &params){B::add_term(params[0].stringValue(),params.size()<2 ? 1 : params[1].numericValue());}
-    void add_boolean_term(Php::Parameters &params){B::add_boolean_term(params[0].stringValue());}
     Php::Value get_docid(Php::Parameters &params){return (int32_t)B::get_docid();}
+    Php::Value serialise(Php::Parameters &params){return B::serialise();}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    static Php::Value Document_get_value(Php::Parameters& params){
+        B*doc = dynamic_cast<B*>(params[0].implementation());
+        return doc ? doc->get_value(params[1].numericValue()):"";
+    }
     virtual ~Document(){}
 
 
     static void get_module_part(Php::Extension& extension){
         Php::Class<Document> cDocument("XapianDocument");
-        cDocument.method<&Document::get_description>("get_description",{});
-        cDocument.method<&Document::add_value>("add_value",{Php::ByVal("slot",Php::Type::Numeric),Php::ByVal("value",Php::Type::String)});
+        cDocument.method<&Document::__construct>("__construct",{Php::ByVal("doc","XapianDocument",false)});
         cDocument.method<&Document::get_value>("get_value",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDocument.method<&Document::add_value>("add_value",{Php::ByVal("slot",Php::Type::Numeric),Php::ByVal("value",Php::Type::String)});
         cDocument.method<&Document::remove_value>("remove_value",{Php::ByVal("slot",Php::Type::Numeric)});
         cDocument.method<&Document::clear_values>("clear_values",{});
-        cDocument.method<&Document::set_data>("set_data",{Php::ByVal("data",Php::Type::String)});
         cDocument.method<&Document::get_data>("get_data",{});
+        cDocument.method<&Document::set_data>("set_data",{Php::ByVal("data",Php::Type::String)});
+        cDocument.method<&Document::add_posting>("add_posting",{Php::ByVal("tname",Php::Type::String),Php::ByVal("tpos",Php::Type::Numeric),Php::ByVal("wdfinc",Php::Type::Numeric,false)});
+        cDocument.method<&Document::add_term>("add_term",{Php::ByVal("term",Php::Type::String),Php::ByVal("wdfinc",Php::Type::Numeric,false)});
+        cDocument.method<&Document::add_boolean_term>("add_boolean_term",{Php::ByVal("term",Php::Type::String)});
+        cDocument.method<&Document::remove_posting>("remove_posting",{Php::ByVal("tname",Php::Type::String),Php::ByVal("tpos",Php::Type::Numeric),Php::ByVal("wdfdec",Php::Type::Numeric,false)});
+        cDocument.method<&Document::remove_term>("remove_term",{Php::ByVal("term",Php::Type::String)});
+        cDocument.method<&Document::clear_terms>("clear_terms",{});
         cDocument.method<&Document::termlist_count>("termlist_count",{});
         cDocument.method<&Document::termlist_begin>("termlist_begin",{});
         cDocument.method<&Document::termlist_end>("termlist_end",{});
         cDocument.method<&Document::values_count>("values_count",{});
         cDocument.method<&Document::values_begin>("values_begin",{});
         cDocument.method<&Document::values_end>("values_end",{});
-        cDocument.method<&Document::add_term>("add_term",{Php::ByVal("term",Php::Type::String)});
-        cDocument.method<&Document::add_boolean_term>("add_boolean_term",{Php::ByVal("term",Php::Type::String)});
         cDocument.method<&Document::get_docid>("get_docid",{});
+        cDocument.method<&Document::serialise>("serialise",{});
+        cDocument.method<&Document::get_description>("get_description",{});
 
         extension.add("Document_get_value",Document_get_value,{Php::ByVal("doc","XapianDocument"),Php::ByVal("slot",Php::Type::Numeric)}); 
         //cDocument.method<&Document::m>("m");
@@ -631,8 +706,20 @@ public:
         }
         *this = B(params[0].stringValue(),params.size()<2 ? 0 : params[1].numericValue());
     }
+    void add_database(Php::Parameters &params){
+        Database*db=dynamic_cast<Database*>(params[0].implementation());
+        B::add_database(*db);
+    }
+    Php::Value reopen(Php::Parameters &params){return B::reopen();}
     void close(Php::Parameters &params){ B::close();}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value postlist_begin(Php::Parameters &params){return Php::Object("XapianPostingIterator",new PostingIterator(B::postlist_begin(params[0].stringValue())));}
+    Php::Value postlist_end(Php::Parameters &params){return Php::Object("XapianPostingIterator",new PostingIterator(B::postlist_end(params[0].stringValue())));}
+    Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
+    Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
     Php::Value has_positions(Php::Parameters &params){ return B::has_positions();}
+    Php::Value positionlist_begin(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_begin(params[0].numericValue(),params[1].stringValue())));}
+    Php::Value positionlist_end(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_end(params[0].numericValue(),params[1].stringValue())));}
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
     Php::Value get_lastdocid(Php::Parameters &params){ return (int64_t)B::get_lastdocid();}
     Php::Value get_avlength(Php::Parameters &params){ return (int32_t)B::get_avlength();}
@@ -653,24 +740,17 @@ public:
     Php::Value get_spelling_suggestion(Php::Parameters &params){return B::get_spelling_suggestion(params[0].stringValue(), params.size()<2 ? 2 : params[1].numericValue());}
     Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
     Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
-    void add_database(Php::Parameters &params){
-        Database*db=dynamic_cast<Database*>(params[0].implementation());
-        B::add_database(*db);
-    }
-    Php::Value get_description(Php::Parameters &params){return B::get_description();}
-    Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
-    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
-    Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
-    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
-    Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
-    Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
-    Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
-    Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
     Php::Value synonyms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_end(params[0].stringValue())));}
     Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
     Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
     Php::Value synonym_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_begin(params[0].stringValue())));}
     Php::Value get_metadata(Php::Parameters &params){return B::get_metadata(params[0].stringValue());}
+    Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
+    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
+    Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
+    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+    Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
+    Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
     void compact(Php::Parameters & params) {
         Xapian::Compactor c;
         B::compact(
@@ -680,13 +760,21 @@ public:
             params.size()<4 ? c : *dynamic_cast<Xapian::Compactor*>(params[3].implementation())
             );
     }
-    Php::Value reopen(Php::Parameters &params){return B::reopen();}
     virtual ~Database(){}
     static Php::Class<Database>  get_module_part(Php::Extension& extension){
         Php::Class<Database> cDatabase("XapianDatabase");
         cDatabase.method<&Database::__construct>("__construct",{Php::ByVal("enquireOrDatabase")});
+        cDatabase.method<&Database::add_database>("add_database");
+        cDatabase.method<&Database::reopen>("reopen",{});
         cDatabase.method<&Database::close>("close",{});
+        cDatabase.method<&Database::get_description>("get_description",{});
+        cDatabase.method<&Database::postlist_end>("postlist_end",{Php::ByVal("tname",Php::Type::String)});
+        cDatabase.method<&Database::postlist_begin>("postlist_begin",{Php::ByVal("tname",Php::Type::String)});
+        cDatabase.method<&Database::termlist_end>("termlist_end",{Php::ByVal("did",Php::Type::Numeric)});
+        cDatabase.method<&Database::termlist_begin>("termlist_begin",{Php::ByVal("did",Php::Type::Numeric)});
         cDatabase.method<&Database::has_positions>("has_positions",{});
+        cDatabase.method<&Database::positionlist_end>("positionlist_end",{Php::ByVal("did",Php::Type::Numeric),Php::ByVal("tname",Php::Type::String)});
+        cDatabase.method<&Database::positionlist_begin>("positionlist_begin",{Php::ByVal("did",Php::Type::Numeric),Php::ByVal("tname",Php::Type::String)});
         cDatabase.method<&Database::get_doccount>("get_doccount",{});
         cDatabase.method<&Database::get_lastdocid>("get_lastdocid",{});
         cDatabase.method<&Database::get_avlength>("get_avlength",{});
@@ -705,16 +793,6 @@ public:
         cDatabase.method<&Database::get_unique_terms>("get_unique_terms",{Php::ByVal("did",Php::Type::Numeric)});
         cDatabase.method<&Database::get_document>("get_document",{Php::ByVal("did",Php::Type::Numeric),{Php::ByVal("flags",Php::Type::Numeric,false)}});
         cDatabase.method<&Database::get_spelling_suggestion>("get_spelling_suggestion",{Php::ByVal("word",Php::Type::String),Php::ByVal("max_edit_distance",Php::Type::Numeric,false)});
-        cDatabase.method<&Database::add_database>("add_database");
-        cDatabase.method<&Database::get_description>("get_description",{});
-        cDatabase.method<&Database::get_uuid>("get_uuid",{});
-        cDatabase.method<&Database::get_revision>("get_revision",{});
-        cDatabase.method<&Database::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
-        cDatabase.method<&Database::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
-        cDatabase.method<&Database::termlist_end>("termlist_end",{Php::ByVal("value",Php::Type::Numeric)});
-        cDatabase.method<&Database::termlist_begin>("termlist_begin",{Php::ByVal("value",Php::Type::Numeric)});
-        cDatabase.method<&Database::allterms_end>("allterms_end",{Php::ByVal("value",Php::Type::String)});
-        cDatabase.method<&Database::allterms_begin>("allterms_begin",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::spellings_end>("spellings_end",{});
         cDatabase.method<&Database::spellings_begin>("spellings_begin",{});
         cDatabase.method<&Database::synonyms_end>("synonyms_end",{Php::ByVal("value",Php::Type::String)});
@@ -722,8 +800,13 @@ public:
         cDatabase.method<&Database::synonym_keys_end>("synonym_keys_end",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::synonym_keys_begin>("synonym_keys_begin",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::get_metadata>("get_metadata",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::get_uuid>("get_uuid",{});
+        cDatabase.method<&Database::get_revision>("get_revision",{});
+        cDatabase.method<&Database::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::allterms_end>("allterms_end",{Php::ByVal("value",Php::Type::String)});
+        cDatabase.method<&Database::allterms_begin>("allterms_begin",{Php::ByVal("value",Php::Type::String)});
         cDatabase.method<&Database::compact>("compact",{Php::ByVal("destdir",Php::Type::String)});
-        cDatabase.method<&Database::reopen>("reopen",{});
         extension.add(std::move(cDatabase));
         return cDatabase;
     }
@@ -751,7 +834,14 @@ public:
     void commit_transaction(Php::Parameters &params){ B::commit_transaction();}
     void commit(Php::Parameters &params){ B::commit();}
     void close(Php::Parameters &params){ B::close();}
+    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value postlist_begin(Php::Parameters &params){return Php::Object("XapianPostingIterator",new PostingIterator(B::postlist_begin(params[0].stringValue())));}
+    Php::Value postlist_end(Php::Parameters &params){return Php::Object("XapianPostingIterator",new PostingIterator(B::postlist_end(params[0].stringValue())));}
+    Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
+    Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
     Php::Value has_positions(Php::Parameters &params){ return B::has_positions();}
+    Php::Value positionlist_begin(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_begin(params[0].numericValue(),params[1].stringValue())));}
+    Php::Value positionlist_end(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_end(params[0].numericValue(),params[1].stringValue())));}
     Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
     Php::Value get_lastdocid(Php::Parameters &params){ return (int64_t)B::get_lastdocid();}
     Php::Value get_avlength(Php::Parameters &params){ return (int32_t)B::get_avlength();}
@@ -772,23 +862,20 @@ public:
     Php::Value get_spelling_suggestion(Php::Parameters &params){return B::get_spelling_suggestion(params[0].stringValue(), params.size()<2 ? 2 : params[1].numericValue());}
     Php::Value spellings_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_end()));}
     Php::Value spellings_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::spellings_begin()));}
-    Php::Value get_description(Php::Parameters &params){return B::get_description();}
-    Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
-    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
-    void add_document(Php::Parameters &params){B::add_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));}
-    Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
-    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
-
-    Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
-    Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
-    Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
-    Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
     Php::Value synonyms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_end(params[0].stringValue())));}
     Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
     Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
     Php::Value synonym_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_begin(params[0].stringValue())));}
 
     Php::Value get_metadata(Php::Parameters &params){return (B::get_metadata(params[0].stringValue()));}
+    Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
+    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
+    void add_document(Php::Parameters &params){B::add_document(*dynamic_cast<Xapian::Document*>(params[0].implementation()));}
+    Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
+    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+
+    Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
+    Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
     void set_metadata(Php::Parameters & params){B::set_metadata(params[0].stringValue(),params[1].stringValue());}
     Php::Value replace_document(Php::Parameters &params){
         if(params[0].isNumeric())  {
@@ -816,14 +903,21 @@ public:
     static void get_module_part(Php::Extension& extension,Php::Class<::Database>& cDatabase){
         Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
         cWritableDatabase.method<&WritableDatabase::__construct>("__construct");
+        cWritableDatabase.method<&WritableDatabase::reopen>("reopen",{});
+        cWritableDatabase.method<&WritableDatabase::close>("close");
         cWritableDatabase.method<&WritableDatabase::get_description>("get_description");
+        cWritableDatabase.method<&WritableDatabase::postlist_end>("postlist_end",{Php::ByVal("tname",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::postlist_begin>("postlist_begin",{Php::ByVal("tname",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::termlist_end>("termlist_end",{Php::ByVal("did",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::termlist_begin>("termlist_begin",{Php::ByVal("did",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::positionlist_end>("positionlist_end",{Php::ByVal("did",Php::Type::Numeric),Php::ByVal("tname",Php::Type::String)});
+        cWritableDatabase.method<&WritableDatabase::positionlist_begin>("positionlist_begin",{Php::ByVal("did",Php::Type::Numeric),Php::ByVal("tname",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::get_uuid>("get_uuid",{});
         cWritableDatabase.method<&WritableDatabase::get_revision>("get_revision",{});
         cWritableDatabase.method<&WritableDatabase::begin_transaction>("begin_transaction");
         cWritableDatabase.method<&WritableDatabase::cancel_transaction>("cancel_transaction");
         cWritableDatabase.method<&WritableDatabase::commit_transaction>("commit_transaction");
         cWritableDatabase.method<&WritableDatabase::commit>("commit");
-        cWritableDatabase.method<&WritableDatabase::close>("close");
         cWritableDatabase.method<&WritableDatabase::has_positions>("has_positions",{});
         cWritableDatabase.method<&WritableDatabase::get_doccount>("get_doccount",{});
         cWritableDatabase.method<&WritableDatabase::get_lastdocid>("get_lastdocid",{});
@@ -846,8 +940,6 @@ public:
         cWritableDatabase.method<&WritableDatabase::add_document>("add_document",{Php::ByVal("doc","XapianDocument")});
         cWritableDatabase.method<&WritableDatabase::metadata_keys_end>("metadata_keys_end",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::metadata_keys_begin>("metadata_keys_begin",{Php::ByVal("value",Php::Type::String)});
-        cWritableDatabase.method<&WritableDatabase::termlist_end>("termlist_end",{Php::ByVal("value",Php::Type::Numeric)});
-        cWritableDatabase.method<&WritableDatabase::termlist_begin>("termlist_begin",{Php::ByVal("value",Php::Type::Numeric)});
         cWritableDatabase.method<&WritableDatabase::allterms_end>("allterms_end",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::allterms_begin>("allterms_begin",{Php::ByVal("value",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::spellings_end>("spellings_end",{});
@@ -861,7 +953,6 @@ public:
         cWritableDatabase.method<&WritableDatabase::replace_document>("replace_document",{Php::ByVal("docIdOrUniqueTerm"),Php::ByVal("doc","XapianDocument")});
         cWritableDatabase.method<&WritableDatabase::delete_document>("delete_document",{Php::ByVal("docIdOrUniqueTerm")});
         cWritableDatabase.method<&WritableDatabase::compact>("compact",{Php::ByVal("destdir",Php::Type::String)});
-        cWritableDatabase.method<&WritableDatabase::reopen>("reopen",{});
         cWritableDatabase.extends(cDatabase);
         extension.add(std::move(cWritableDatabase));
     }
@@ -1199,6 +1290,8 @@ extern "C" {
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
         ValueIterator::get_module_part(extension);
+        PositionIterator::get_module_part(extension);
+        PostingIterator::get_module_part(extension);
         Stem::get_module_part(extension);
         Php::Class<Stopper> cStopper = Stopper::get_module_part(extension);
         SimpleStopper::get_module_part(extension, cStopper);
