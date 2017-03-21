@@ -1,6 +1,9 @@
 #include <phpcpp.h>
 #include <xapian.h>
 
+#define TRY_BLOCK try{
+#define CATCH_BLOCK }catch(Xapian::Error e){throw Php::Exception(std::string(e.get_type())+" "+e.get_msg());}
+
 class Error: public Php::Base, public Xapian::Error {
 public:
     Error(const Xapian::Error&e):Xapian::Error(e){}
@@ -698,12 +701,14 @@ public:
     Database():B(){}
     Database(const B&db):B(db){}
     void __construct(Php::Parameters &params){
-        Database *db = dynamic_cast<Database*>(params[0].implementation());
-        if(db) {
-            *this=*db;
-            return;
-        }
-        *this = B(params[0].stringValue(),params.size()<2 ? 0 : params[1].numericValue());
+        TRY_BLOCK
+            B *db = dynamic_cast<B*>(params[0].implementation());
+            if(db) {
+                *this=*db;
+                return;
+            }
+            *this = B(params[0].stringValue(),params.size()<2 ? 0 : params[1].numericValue());
+        CATCH_BLOCK
     }
     void add_database(Php::Parameters &params){
         try {
@@ -716,31 +721,31 @@ public:
             throw new Php::Exception(std::string(e.get_type())+" "+e.get_msg());
         }
     }
-    Php::Value reopen(Php::Parameters &params){
-        try{
+    Php::Value reopen(){
+        TRY_BLOCK
             return B::reopen();
-        }catch(Xapian::Error e){
-            throw new Php::Exception(std::string(e.get_type())+" "+e.get_msg());
-        }
+        CATCH_BLOCK
     }
     void close(Php::Parameters &params){ B::close();}
-    Php::Value get_description(Php::Parameters &params){return B::get_description();}
+    Php::Value get_description(){return B::get_description();}
     Php::Value postlist_begin(Php::Parameters &params){return Php::Object("XapianPostingIterator",new PostingIterator(B::postlist_begin(params[0].stringValue())));}
     Php::Value postlist_end(Php::Parameters &params){return Php::Object("XapianPostingIterator",new PostingIterator(B::postlist_end(params[0].stringValue())));}
     Php::Value termlist_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_end(params[0].numericValue())));}
     Php::Value termlist_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::termlist_begin(params[0].numericValue())));}
-    Php::Value has_positions(Php::Parameters &params){ return B::has_positions();}
+    Php::Value has_positions(){ return B::has_positions();}
     Php::Value positionlist_begin(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_begin(params[0].numericValue(),params[1].stringValue())));}
     Php::Value positionlist_end(Php::Parameters &params){return Php::Object("XapianPositionIterator",new PositionIterator(B::positionlist_end(params[0].numericValue(),params[1].stringValue())));}
-    Php::Value get_doccount(Php::Parameters &params){ return (int64_t)B::get_doccount();}
-    Php::Value get_lastdocid(Php::Parameters &params){ return (int64_t)B::get_lastdocid();}
-    Php::Value get_avlength(Php::Parameters &params){ return (int32_t)B::get_avlength();}
+    Php::Value get_doccount(){ return (int64_t)B::get_doccount();}
+    Php::Value get_lastdocid(){ return (int64_t)B::get_lastdocid();}
+    Php::Value get_avlength(){ return (int32_t)B::get_avlength();}
     Php::Value get_termfreq(Php::Parameters &params){ return (int32_t)B::get_termfreq(params[0].stringValue());}
     Php::Value term_exists(Php::Parameters &params){ return B::term_exists(params[0].stringValue());}
     Php::Value get_collection_freq(Php::Parameters &params){ return (int32_t)B::get_collection_freq(params[0].stringValue());}
     Php::Value get_value_freq(Php::Parameters &params){ return (int32_t)B::get_value_freq(params[0].numericValue());}
     Php::Value get_value_lower_bound(Php::Parameters &params){ return B::get_value_lower_bound(params[0].numericValue());}
     Php::Value get_value_upper_bound(Php::Parameters &params){ return B::get_value_upper_bound(params[0].numericValue());}
+    void keep_alive(){B::keep_alive();}
+    Php::Value locked(){TRY_BLOCK return B::locked();CATCH_BLOCK}
     Php::Value get_doclength_lower_bound(Php::Parameters &params){ return (int32_t)B::get_doclength_lower_bound();}
     Php::Value get_doclength_upper_bound(Php::Parameters &params){ return (int32_t)B::get_doclength_upper_bound();}
     Php::Value get_wdf_upper_bound(Php::Parameters &params){ return (int32_t)B::get_wdf_upper_bound(params[0].stringValue());}
@@ -756,11 +761,11 @@ public:
     Php::Value synonyms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonyms_begin(params[0].stringValue())));}
     Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
     Php::Value synonym_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_begin(params[0].stringValue())));}
-    Php::Value get_metadata(Php::Parameters &params){return B::get_metadata(params[0].stringValue());}
+    Php::Value get_metadata(Php::Parameters &params){TRY_BLOCK return B::get_metadata(params[0].stringValue());CATCH_BLOCK}
     Php::Value get_uuid(Php::Parameters &params){return B::get_uuid();}
-    Php::Value get_revision(Php::Parameters &params){return (int64_t)B::get_revision();}
+    Php::Value get_revision(Php::Parameters &params){TRY_BLOCK return (int64_t)B::get_revision();CATCH_BLOCK}
     Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
-    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+    Php::Value metadata_keys_begin(Php::Parameters &params){TRY_BLOCK return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));CATCH_BLOCK}
     Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
     Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
     void compact(Php::Parameters & params) {
@@ -796,6 +801,8 @@ public:
         cDatabase.method<&Database::get_value_freq>("get_value_freq",{Php::ByVal("term",Php::Type::Numeric)});
         cDatabase.method<&Database::get_value_lower_bound>("get_value_lower_bound",{Php::ByVal("slot",Php::Type::Numeric)});
         cDatabase.method<&Database::get_value_upper_bound>("get_value_upper_bound",{Php::ByVal("slot",Php::Type::Numeric)});
+        cDatabase.method<&Database::keep_alive>("keep_alive",{});
+        cDatabase.method<&Database::locked>("locked",{});
         cDatabase.method<&Database::get_doclength_lower_bound>("get_doclength_lower_bound",{});
         cDatabase.method<&Database::get_doclength_upper_bound>("get_doclength_upper_bound",{});
         cDatabase.method<&Database::get_wdf_upper_bound>("get_wdf_upper_bound",{Php::ByVal("term",Php::Type::String)});
@@ -830,6 +837,7 @@ public:
     WritableDatabase():B(){}
     WritableDatabase(const B&d):B(d){}
     void __construct(Php::Parameters& params){
+        TRY_BLOCK
         if(params.size()>0){
             if(params[0].isObject()){
                 *this = *dynamic_cast<WritableDatabase*>(params[0].implementation());
@@ -839,18 +847,17 @@ public:
             int action=params.size()>1 ? params[1].numericValue() : 0;
             *this = B(path,action);
         }
+        CATCH_BLOCK
     }    
     virtual ~WritableDatabase(){}
     void add_database(Php::Parameters &params){
-        try {
+        TRY_BLOCK
             {
                 Xapian::Database*db=dynamic_cast<Xapian::Database*>(params[0].implementation());
                 if(db) {B::add_database(*db);return;}
             }
             throw Php::Exception("add_database: invalid arg");
-        }catch(Xapian::Error e){
-            throw new Php::Exception(std::string(e.get_type())+" "+e.get_msg());
-        }
+        CATCH_BLOCK
     }
     void commit(){ B::commit();}
     void flush(){ B::flush();}
@@ -895,6 +902,8 @@ public:
     Php::Value get_value_freq(Php::Parameters &params){ return (int32_t)B::get_value_freq(params[0].numericValue());}
     Php::Value get_value_lower_bound(Php::Parameters &params){ return B::get_value_lower_bound(params[0].numericValue());}
     Php::Value get_value_upper_bound(Php::Parameters &params){ return B::get_value_upper_bound(params[0].numericValue());}
+    void keep_alive(){B::keep_alive();}
+    Php::Value locked(){TRY_BLOCK return B::locked();CATCH_BLOCK}
     Php::Value get_doclength_lower_bound(){ return (int32_t)B::get_doclength_lower_bound();}
     Php::Value get_doclength_upper_bound(){ return (int32_t)B::get_doclength_upper_bound();}
     Php::Value get_wdf_upper_bound(Php::Parameters &params){ return (int32_t)B::get_wdf_upper_bound(params[0].stringValue());}
@@ -911,11 +920,11 @@ public:
     Php::Value synonym_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_end(params[0].stringValue())));}
     Php::Value synonym_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::synonym_keys_begin(params[0].stringValue())));}
 
-    Php::Value get_metadata(Php::Parameters &params){return (B::get_metadata(params[0].stringValue()));}
+    Php::Value get_metadata(Php::Parameters &params){TRY_BLOCK return (B::get_metadata(params[0].stringValue()));CATCH_BLOCK}
     Php::Value get_uuid(){return B::get_uuid();}
-    Php::Value get_revision(){return (int64_t)B::get_revision();}
+    Php::Value get_revision(){TRY_BLOCK return (int64_t)B::get_revision();CATCH_BLOCK}
     Php::Value metadata_keys_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_end(params[0].stringValue())));}
-    Php::Value metadata_keys_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue())));}
+    Php::Value metadata_keys_begin(Php::Parameters &params){TRY_BLOCK return Php::Object("XapianTermIterator",new TermIterator(B::metadata_keys_begin(params[0].stringValue()))); CATCH_BLOCK}
 
     Php::Value allterms_end(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_end(params[0].stringValue())));}
     Php::Value allterms_begin(Php::Parameters &params){return Php::Object("XapianTermIterator",new TermIterator(B::allterms_begin(params[0].stringValue())));}
@@ -928,7 +937,7 @@ public:
             params.size()<4 ? c : *dynamic_cast<Xapian::Compactor*>(params[3].implementation())
             );
     }
-    Php::Value reopen(Php::Parameters &params){return B::reopen();}
+    Php::Value reopen(Php::Parameters &params){TRY_BLOCK return B::reopen();CATCH_BLOCK}
     static void get_module_part(Php::Extension& extension,Php::Class<::Database>& cDatabase){
         Php::Class<WritableDatabase> cWritableDatabase("XapianWritableDatabase");
         cWritableDatabase.method<&WritableDatabase::__construct>("__construct");
@@ -969,6 +978,8 @@ public:
         cWritableDatabase.method<&WritableDatabase::get_value_freq>("get_value_freq",{Php::ByVal("term",Php::Type::Numeric)});
         cWritableDatabase.method<&WritableDatabase::get_value_lower_bound>("get_value_lower_bound",{Php::ByVal("slot",Php::Type::Numeric)});
         cWritableDatabase.method<&WritableDatabase::get_value_upper_bound>("get_value_upper_bound",{Php::ByVal("slot",Php::Type::Numeric)});
+        cWritableDatabase.method<&WritableDatabase::keep_alive>("keep_alive",{});
+        cWritableDatabase.method<&WritableDatabase::locked>("locked",{});
         cWritableDatabase.method<&WritableDatabase::get_doclength_lower_bound>("get_doclength_lower_bound",{});
         cWritableDatabase.method<&WritableDatabase::get_doclength_upper_bound>("get_doclength_upper_bound",{});
         cWritableDatabase.method<&WritableDatabase::get_wdf_upper_bound>("get_wdf_upper_bound",{Php::ByVal("term",Php::Type::String)});
