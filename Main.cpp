@@ -943,8 +943,6 @@ public:
         cWritableDatabase.method<&WritableDatabase::replace_document>("replace_document",{Php::ByVal("docIdOrUniqueTerm"),Php::ByVal("doc","XapianDocument")});
         cWritableDatabase.method<&WritableDatabase::add_spelling>("add_spelling",{Php::ByVal("word",Php::Type::String),Php::ByVal("freqinc",Php::Type::Numeric,false)});
         cWritableDatabase.method<&WritableDatabase::remove_spelling>("remove_spelling",{Php::ByVal("word",Php::Type::String),Php::ByVal("freqinc",Php::Type::Numeric,false)});
-        cWritableDatabase.method<&WritableDatabase::add_spelling>("add_spelling",{Php::ByVal("word",Php::Type::String),Php::ByVal("freqinc",Php::Type::Numeric,false)});
-        cWritableDatabase.method<&WritableDatabase::remove_spelling>("remove_spelling",{Php::ByVal("word",Php::Type::String),Php::ByVal("freqinc",Php::Type::Numeric,false)});
         cWritableDatabase.method<&WritableDatabase::add_synonym>("add_synonym",{Php::ByVal("term",Php::Type::String),Php::ByVal("synonym",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::remove_synonym>("remove_synonym",{Php::ByVal("term",Php::Type::String),Php::ByVal("synonym",Php::Type::String)});
         cWritableDatabase.method<&WritableDatabase::clear_synonyms>("clear_synonyms",{Php::ByVal("term",Php::Type::String)});
