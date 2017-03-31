@@ -9,35 +9,31 @@ public:
     Parameters(Php::Base*object):Php::Parameters(object){}
 };
 
-#define IMPL_WEIGHT_COMMON_METHODS(T,B) \
-  Php::Value name(){return Php::Object("Xapian"#T, m ? m->name():"");}\
+#define IMPL_WEIGHT_COMMON_METHODS(WeightClass,B) \
+  Php::Value name(){return Php::Object("Xapian"#WeightClass, m ? m->name():"");}\
   Php::Value serialise(){return m ? m->serialise():"";}\
-  Php::Value unserialise(Php::Parameters&params){return Php::Object("Xapian"#T,m ? m->unserialise(params[0].stringValue()) :NULL);}\
+  Php::Value unserialise(Php::Parameters&params){return Php::Object("Xapian"#WeightClass,m ? m->unserialise(params[0].stringValue()) :NULL);}\
   Php::Value get_sumpart(Php::Parameters& params){return m ? m->get_sumpart(params[0].numericValue(),params[1].numericValue(),params[2].numericValue()) : 0.;}\
   Php::Value get_maxpart(){return m ? m->get_maxpart():0;}\
   Php::Value get_sumextra(Php::Parameters& params){return m ? m->get_sumextra(params[0].numericValue(),params[1].numericValue()) : 0;}\
   Php::Value get_maxextra(){return m ? m->get_maxextra() : 0;}\
 
-#define ADD_WEIGHT_COMMON_METHODS(T,cWeight) \
-  cWeight.method<&T::name>("name",{});\
-  cWeight.method<&T::serialise>("serialise",{});\
-  cWeight.method<&T::unserialise>("unserialise",{Php::ByVal("serialised",Php::Type::String)});\
-  cWeight.method<&T::get_sumpart>("get_sumpart",Php::Public,{Php::ByVal("wdf",Php::Type::Numeric),Php::ByVal("doclen",Php::Type::Numeric),Php::ByVal("uniqterms",Php::Type::Numeric)});\
-  cWeight.method<&T::get_maxpart>("get_maxpart",{});\
-  cWeight.method<&T::get_sumextra>("get_sumextra",{Php::ByVal("doclen",Php::Type::Numeric),Php::ByVal("uniqterms",Php::Type::Numeric)});\
-  cWeight.method<&T::get_maxextra>("get_maxextra",{})\
+#define ADD_WEIGHT_COMMON_METHODS(WeightClass,weightClassInstance) \
+  weightClassInstance.method<&WeightClass::name>("name",{});\
+  weightClassInstance.method<&WeightClass::serialise>("serialise",{});\
+  weightClassInstance.method<&WeightClass::unserialise>("unserialise",{Php::ByVal("serialised",Php::Type::String)});\
+  weightClassInstance.method<&WeightClass::get_sumpart>("get_sumpart",Php::Public,{Php::ByVal("wdf",Php::Type::Numeric),Php::ByVal("doclen",Php::Type::Numeric),Php::ByVal("uniqterms",Php::Type::Numeric)});\
+  weightClassInstance.method<&WeightClass::get_maxpart>("get_maxpart",{});\
+  weightClassInstance.method<&WeightClass::get_sumextra>("get_sumextra",{Php::ByVal("doclen",Php::Type::Numeric),Php::ByVal("uniqterms",Php::Type::Numeric)});\
+  weightClassInstance.method<&WeightClass::get_maxextra>("get_maxextra",{})\
 
-  /*
-  cWeight.method<&T::serialise>("serialise",{});\
-  cWeight.method<&T::unserialise>("unserialise",{Php::ByVal("serialised",Php::Type::String)})
-
-*/
 
 class Weight: public Php::Base {
     typedef Xapian::Weight B;
 protected:
     std::shared_ptr<B> m;
 public:
+    
     virtual Xapian::Weight*getWeight() {return m.get();}
     IMPL_WEIGHT_COMMON_METHODS(Weight,B)
     static Php::Class<Weight> get_module_part(Php::Extension& extension){
@@ -45,6 +41,50 @@ public:
         ADD_WEIGHT_COMMON_METHODS(Weight,cWeight);
         extension.add(std::move(cWeight));
         return cWeight;
+    }
+};
+
+class BoolWeight: public Weight {
+    typedef Xapian::BoolWeight B;
+public:
+    BoolWeight(){m.reset(new B());}
+    BoolWeight(const BoolWeight&other){m=other.m;}
+    virtual ~BoolWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=BoolWeight();
+    }
+    IMPL_WEIGHT_COMMON_METHODS(BoolWeight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<BoolWeight> cBoolWeight("XapianBoolWeight");
+        cBoolWeight.method<&BoolWeight::__construct>("__construct",{});
+        ADD_WEIGHT_COMMON_METHODS(BoolWeight,cBoolWeight);
+        cBoolWeight.extends(cWeight);
+        extension.add(std::move(cBoolWeight));
+    }
+};
+
+class TfIdfWeight: public Weight {
+    typedef Xapian::TfIdfWeight B;
+public:
+    TfIdfWeight(){m.reset(new B());}
+    TfIdfWeight(const std::string&normalisations){m.reset(new B(normalisations));}
+    TfIdfWeight(const TfIdfWeight&other){m=other.m;}
+    virtual ~TfIdfWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        if(params.size()>0)
+            *this=TfIdfWeight(params[0].stringValue());
+        else
+            *this=TfIdfWeight();
+    }
+    IMPL_WEIGHT_COMMON_METHODS(TfIdfWeight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<TfIdfWeight> cTfIdfWeight("XapianTfIdfWeight");
+        cTfIdfWeight.method<&TfIdfWeight::__construct>("__construct",{Php::ByVal("normalisations",Php::Type::String,false)});
+        ADD_WEIGHT_COMMON_METHODS(TfIdfWeight,cTfIdfWeight);
+        cTfIdfWeight.extends(cWeight);
+        extension.add(std::move(cTfIdfWeight));
     }
 };
 
@@ -89,26 +129,6 @@ public:
     }
 };
 
-class BoolWeight: public Weight {
-    typedef Xapian::BoolWeight B;
-public:
-    BoolWeight(){m.reset(new B());}
-    BoolWeight(const BoolWeight&other){m=other.m;}
-    virtual ~BoolWeight(){m.reset();}
-    virtual Xapian::Weight*getWeight(){return m.get();}
-    void __construct(Php::Parameters &params) {
-        *this=BoolWeight();
-    }
-    IMPL_WEIGHT_COMMON_METHODS(BoolWeight,B)
-    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
-        Php::Class<BoolWeight> cBoolWeight("XapianBoolWeight");
-        cBoolWeight.method<&BoolWeight::__construct>("__construct",{});
-        ADD_WEIGHT_COMMON_METHODS(BoolWeight,cBoolWeight);
-        cBoolWeight.extends(cWeight);
-        extension.add(std::move(cBoolWeight));
-    }
-};
-
 class TradWeight: public Weight {
     typedef Xapian::TradWeight B;
 public:
@@ -129,6 +149,69 @@ public:
         extension.add(std::move(cTradWeight));
     }
 };
+class InL2Weight: public Weight {
+    typedef Xapian::InL2Weight B;
+public:
+    InL2Weight(){m.reset(new B());}
+    InL2Weight(double c){m.reset(new B(c));}
+    InL2Weight(const InL2Weight&other){m=other.m;}
+    virtual ~InL2Weight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=InL2Weight(params[0].floatValue());
+    }
+    IMPL_WEIGHT_COMMON_METHODS(InL2Weight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<InL2Weight> cInL2Weight("XapianInL2Weight");
+        cInL2Weight.method<&InL2Weight::__construct>("__construct",{Php::ByVal("c",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(InL2Weight,cInL2Weight);
+        cInL2Weight.extends(cWeight);
+        extension.add(std::move(cInL2Weight));
+    }
+};
+
+class IfB2Weight: public Weight {
+    typedef Xapian::IfB2Weight B;
+public:
+    IfB2Weight(){m.reset(new B());}
+    IfB2Weight(double c){m.reset(new B(c));}
+    IfB2Weight(const IfB2Weight&other){m=other.m;}
+    virtual ~IfB2Weight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=IfB2Weight(params[0].floatValue());
+    }
+    IMPL_WEIGHT_COMMON_METHODS(IfB2Weight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<IfB2Weight> cIfB2Weight("XapianIfB2Weight");
+        cIfB2Weight.method<&IfB2Weight::__construct>("__construct",{Php::ByVal("c",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(IfB2Weight,cIfB2Weight);
+        cIfB2Weight.extends(cWeight);
+        extension.add(std::move(cIfB2Weight));
+    }
+};
+
+class IneB2Weight: public Weight {
+    typedef Xapian::IneB2Weight B;
+public:
+    IneB2Weight(){m.reset(new B());}
+    IneB2Weight(double c){m.reset(new B(c));}
+    IneB2Weight(const IneB2Weight&other){m=other.m;}
+    virtual ~IneB2Weight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=IneB2Weight(params[0].floatValue());
+    }
+    IMPL_WEIGHT_COMMON_METHODS(IneB2Weight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<IneB2Weight> cIneB2Weight("XapianIneB2Weight");
+        cIneB2Weight.method<&IneB2Weight::__construct>("__construct",{Php::ByVal("c",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(IneB2Weight,cIneB2Weight);
+        cIneB2Weight.extends(cWeight);
+        extension.add(std::move(cIneB2Weight));
+    }
+};
+
 
 class BB2Weight: public Weight {
     typedef Xapian::BB2Weight B;
@@ -148,6 +231,120 @@ public:
         ADD_WEIGHT_COMMON_METHODS(BB2Weight,cBB2Weight);
         cBB2Weight.extends(cWeight);
         extension.add(std::move(cBB2Weight));
+    }
+};
+
+class DLHWeight: public Weight {
+    typedef Xapian::DLHWeight B;
+public:
+    DLHWeight(){m.reset(new B());}
+    DLHWeight(const DLHWeight&other){m=other.m;}
+    virtual ~DLHWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=DLHWeight();
+    }
+    IMPL_WEIGHT_COMMON_METHODS(DLHWeight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<DLHWeight> cDLHWeight("XapianDLHWeight");
+        cDLHWeight.method<&DLHWeight::__construct>("__construct",{Php::ByVal("k",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(DLHWeight,cDLHWeight);
+        cDLHWeight.extends(cWeight);
+        extension.add(std::move(cDLHWeight));
+    }
+};
+
+class PL2Weight: public Weight {
+    typedef Xapian::PL2Weight B;
+public:
+    PL2Weight(){m.reset(new B(1.));}
+    PL2Weight(double k){m.reset(new B(k));}
+    PL2Weight(const PL2Weight&other){m=other.m;}
+    virtual ~PL2Weight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=PL2Weight((double)params[0]);
+    }
+    IMPL_WEIGHT_COMMON_METHODS(PL2Weight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<PL2Weight> cPL2Weight("XapianPL2Weight");
+        cPL2Weight.method<&PL2Weight::__construct>("__construct",{Php::ByVal("k",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(PL2Weight,cPL2Weight);
+        cPL2Weight.extends(cWeight);
+        extension.add(std::move(cPL2Weight));
+    }
+};
+
+class PL2PlusWeight: public Weight {
+    typedef Xapian::PL2PlusWeight B;
+public:
+    PL2PlusWeight(double c, double delta){m.reset(new B(c, delta));}
+    PL2PlusWeight(const PL2PlusWeight&other){m=other.m;}
+    virtual ~PL2PlusWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=PL2PlusWeight((double)params[0],(double)params[1]);
+    }
+    IMPL_WEIGHT_COMMON_METHODS(PL2PlusWeight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<PL2PlusWeight> cPL2PlusWeight("XapianPL2PlusWeight");
+        cPL2PlusWeight.method<&PL2PlusWeight::__construct>("__construct",{Php::ByVal("c",Php::Type::Float),Php::ByVal("delta",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(PL2PlusWeight,cPL2PlusWeight);
+        cPL2PlusWeight.extends(cWeight);
+        extension.add(std::move(cPL2PlusWeight));
+    }
+};
+
+class DPHWeight: public Weight {
+    typedef Xapian::DPHWeight B;
+public:
+    DPHWeight(){m.reset(new B());}
+    DPHWeight(const DPHWeight&other){m=other.m;}
+    virtual ~DPHWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=DPHWeight();
+    }
+    IMPL_WEIGHT_COMMON_METHODS(DPHWeight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<DPHWeight> cDPHWeight("XapianDPHWeight");
+        cDPHWeight.method<&DPHWeight::__construct>("__construct",{Php::ByVal("k",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(DPHWeight,cDPHWeight);
+        cDPHWeight.extends(cWeight);
+        extension.add(std::move(cDPHWeight));
+    }
+};
+
+class LMWeight: public Weight {
+    typedef Xapian::LMWeight B;
+public:
+    LMWeight(double param_log_=0.0, 
+        B::type_smoothing select_smoothing_=B::TWO_STAGE_SMOOTHING, 
+        double param_smoothing1_=-1.0, double param_smoothing2_=-1.0){
+        m.reset(new B(
+            param_log_,select_smoothing_,
+            param_smoothing1_, 
+            param_smoothing2_
+            ));
+    }
+    LMWeight(const LMWeight&other){m=other.m;}
+    virtual ~LMWeight(){m.reset();}
+    virtual Xapian::Weight*getWeight(){return m.get();}
+    void __construct(Php::Parameters &params) {
+        *this=LMWeight(
+            params.size()<1?0.:params[0].floatValue(),
+            params.size()<2?B::TWO_STAGE_SMOOTHING:(B::type_smoothing)params[1].numericValue(),
+            params.size()<3? -1.:params[2].floatValue(),
+            params.size()<4? -1.:params[3].floatValue()
+            );
+    }
+    IMPL_WEIGHT_COMMON_METHODS(LMWeight,B)
+    static void get_module_part(Php::Extension& extension, Php::Class<Weight>cWeight){
+        Php::Class<LMWeight> cLMWeight("XapianLMWeight");
+        cLMWeight.method<&LMWeight::__construct>("__construct",{Php::ByVal("k",Php::Type::Float)});
+        ADD_WEIGHT_COMMON_METHODS(LMWeight,cLMWeight);
+        cLMWeight.extends(cWeight);
+        extension.add(std::move(cLMWeight));
     }
 };
 
@@ -1390,15 +1587,6 @@ DECL_CLASS(Registry);
 DECL_CLASS(StemImplementation);
 DECL_CLASS(Utf8Iterator);
 DECL_CLASS(ValueSetMatchDecider);
-DECL_CLASS_W(TfIdfWeight,Weight);
-DECL_CLASS_W(InL2Weight, Weight);
-DECL_CLASS_W(IfB2Weight, Weight);
-DECL_CLASS_W(IneB2Weight, Weight);
-DECL_CLASS_W(DLHWeight, Weight);
-DECL_CLASS_W(PL2Weight, Weight);
-DECL_CLASS_W(PL2PlusWeight, Weight);
-DECL_CLASS_W(DPHWeight, Weight);
-DECL_CLASS_W(LMWeight, Weight);
 
 /**
  *  tell the compiler that the get_module is a pure C function
@@ -1421,11 +1609,20 @@ extern "C" {
         // @todo    add your own functions, classes, namespaces to the extension
         PhpXapian::get_module_part(extension); 
         Php::Class<Weight> cWeight = Weight::get_module_part(extension);
+        BoolWeight::get_module_part(extension, cWeight);
+        TfIdfWeight::get_module_part(extension, cWeight);
         BM25Weight::get_module_part(extension, cWeight);
         BM25PlusWeight::get_module_part(extension, cWeight);
-        BoolWeight::get_module_part(extension, cWeight);
         TradWeight::get_module_part(extension, cWeight);
+        InL2Weight::get_module_part(extension, cWeight);
+        IfB2Weight::get_module_part(extension, cWeight);
+        IneB2Weight::get_module_part(extension, cWeight);
         BB2Weight::get_module_part(extension, cWeight);
+        DLHWeight::get_module_part(extension, cWeight);
+        PL2Weight::get_module_part(extension, cWeight);
+        PL2PlusWeight::get_module_part(extension, cWeight);
+        DPHWeight::get_module_part(extension, cWeight);
+        LMWeight::get_module_part(extension, cWeight);
         CoordWeight::get_module_part(extension, cWeight);
         Compactor::get_module_part(extension);
         TermIterator::get_module_part(extension);
@@ -1480,15 +1677,6 @@ REG_CLASS(Registry);
 REG_CLASS(StemImplementation);
 REG_CLASS(Utf8Iterator);
 REG_CLASS(ValueSetMatchDecider);
-REG_CLASS_W(TfIdfWeight, Weight);
-REG_CLASS_W(InL2Weight, Weight);
-REG_CLASS_W(IfB2Weight, Weight);
-REG_CLASS_W(IneB2Weight, Weight);
-REG_CLASS_W(DLHWeight, Weight);
-REG_CLASS_W(PL2Weight, Weight);
-REG_CLASS_W(PL2PlusWeight, Weight);
-REG_CLASS_W(DPHWeight, Weight);
-REG_CLASS_W(LMWeight, Weight);
         // return the extension
         return extension;
     }
