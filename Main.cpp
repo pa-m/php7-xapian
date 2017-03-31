@@ -929,6 +929,28 @@ public:
     }
 };
 
+class ExpandDecider: public Php::Base, public Xapian::ExpandDecider {
+    typedef Xapian::ExpandDecider B;
+public:
+    ExpandDecider():B(){}
+    void __construct(Php::Parameters &params){}
+    Php::Value apply(Php::Parameters &params){return true;}
+    virtual bool    operator() (const std::string&term) const{
+        Php::Array fn({this,"apply"});
+        bool retval=false;
+        if(fn.isCallable())
+            retval = fn(term).boolValue();
+        return retval;
+    }
+    virtual ~ExpandDecider(){}
+    static void get_module_part(Php::Extension& extension){
+        Php::Class<ExpandDecider> cExpandDecider("XapianExpandDecider");
+        cExpandDecider.method<&ExpandDecider::__construct>("__construct");
+        cExpandDecider.method<&ExpandDecider::apply>("apply",{Php::ByVal("term",Php::Type::String)});
+        extension.add(std::move(cExpandDecider));
+    }
+};
+
 class Database: public Php::Base , public Xapian::Database {
     typedef Xapian::Database B;
 public:
@@ -1560,7 +1582,6 @@ public:\
     }\
 }
 
-DECL_CLASS(ExpandDecider);
 DECL_CLASS(ExpandDeciderAnd);
 DECL_CLASS(ExpandDeciderFilterTerms);
 DECL_CLASS(ExpandDeciderFilterPrefix);
@@ -1650,33 +1671,32 @@ extern "C" {
 #define REG_CLASS(T) T::get_module_part(extension)        
 #define REG_CLASS_W(T,P) T::get_module_part(extension, c##P)        
         REG_CLASS(ExpandDecider);
-REG_CLASS(ExpandDecider);
-REG_CLASS(ExpandDeciderAnd);
-REG_CLASS(ExpandDeciderFilterTerms);
-REG_CLASS(ExpandDeciderFilterPrefix);
-REG_CLASS(LatLongCoordsIterator);
-REG_CLASS(LatLongCoords);
-REG_CLASS(LatLongMetric);
-REG_CLASS(GreatCircleMetric);
-Php::Class<::KeyMaker> cKeyMaker=REG_CLASS(KeyMaker);
-REG_CLASS_W(LatLongDistanceKeyMaker, KeyMaker);
-REG_CLASS_W(MultiValueKeyMaker, KeyMaker);
-Php::Class<PostingSource> cPostingSource=REG_CLASS(PostingSource);
-REG_CLASS_W(LatLongDistancePostingSource, PostingSource);
-REG_CLASS_W(ValuePostingSource, PostingSource);
-REG_CLASS_W(ValueWeightPostingSource, PostingSource);
-REG_CLASS_W(DecreasingValueWeightPostingSource, PostingSource);
-REG_CLASS_W(ValueMapPostingSource, PostingSource);
-REG_CLASS_W(FixedWeightPostingSource, PostingSource);
-Php::Class<RangeProcessor> cRangeProcessor=REG_CLASS(RangeProcessor);
-REG_CLASS_W(DateRangeProcessor, RangeProcessor);
-REG_CLASS_W(NumberRangeProcessor, RangeProcessor);
-REG_CLASS_W(ValueRangeProcessor, RangeProcessor);
-REG_CLASS(FieldProcessor);
-REG_CLASS(Registry);
-REG_CLASS(StemImplementation);
-REG_CLASS(Utf8Iterator);
-REG_CLASS(ValueSetMatchDecider);
+        REG_CLASS(ExpandDeciderAnd);
+        REG_CLASS(ExpandDeciderFilterTerms);
+        REG_CLASS(ExpandDeciderFilterPrefix);
+        REG_CLASS(LatLongCoordsIterator);
+        REG_CLASS(LatLongCoords);
+        REG_CLASS(LatLongMetric);
+        REG_CLASS(GreatCircleMetric);
+        Php::Class<::KeyMaker> cKeyMaker=REG_CLASS(KeyMaker);
+        REG_CLASS_W(LatLongDistanceKeyMaker, KeyMaker);
+        REG_CLASS_W(MultiValueKeyMaker, KeyMaker);
+        Php::Class<PostingSource> cPostingSource=REG_CLASS(PostingSource);
+        REG_CLASS_W(LatLongDistancePostingSource, PostingSource);
+        REG_CLASS_W(ValuePostingSource, PostingSource);
+        REG_CLASS_W(ValueWeightPostingSource, PostingSource);
+        REG_CLASS_W(DecreasingValueWeightPostingSource, PostingSource);
+        REG_CLASS_W(ValueMapPostingSource, PostingSource);
+        REG_CLASS_W(FixedWeightPostingSource, PostingSource);
+        Php::Class<RangeProcessor> cRangeProcessor=REG_CLASS(RangeProcessor);
+        REG_CLASS_W(DateRangeProcessor, RangeProcessor);
+        REG_CLASS_W(NumberRangeProcessor, RangeProcessor);
+        REG_CLASS_W(ValueRangeProcessor, RangeProcessor);
+        REG_CLASS(FieldProcessor);
+        REG_CLASS(Registry);
+        REG_CLASS(StemImplementation);
+        REG_CLASS(Utf8Iterator);
+        REG_CLASS(ValueSetMatchDecider);
         // return the extension
         return extension;
     }
