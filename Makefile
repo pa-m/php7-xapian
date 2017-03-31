@@ -126,8 +126,14 @@ OBJECTS             =   $(SOURCES:%.cpp=%.o)
 #
 
 
-${EXTENSION}:           ${OBJECTS}
+${EXTENSION}:           /usr/lib/libphpcpp.so.2.0.0 ${OBJECTS} 
 						${LINKER} ${LINKER_FLAGS} -o $@ ${OBJECTS} ${LINKER_DEPENDENCIES}
+
+/usr/lib/libphpcpp.so.2.0.0: PHP-CPP/.git
+	(cd PHP-CPP && make && sudo make install)
+
+PHP-CPP/.git:
+	git clone "https://github.com/CopernicaMarketingSoftware/PHP-CPP.git"
 
 ${OBJECTS}:	${SOURCES}
 						${COMPILER} ${COMPILER_FLAGS} $@ ${@:%.o=%.cpp}

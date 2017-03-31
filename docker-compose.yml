@@ -1,0 +1,12 @@
+version: "2"
+services:
+  php7xapian:
+    container_name: php7xapian
+    hostname: php7xapian
+    build: .
+    volumes: 
+      - .:/root/projects/php7xapian
+      - ./out:/out
+    tty: yes
+    working_dir: /root/projects/php7xapian
+    entrypoint: /bin/bash

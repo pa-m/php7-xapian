@@ -1,17 +1,26 @@
 
-# php 7 bindings for xapian
+# PHP 7 bindings for xapian
 
-## build env
+Some methods I didnt need are not implemented yet, see TODO
 
+## build environment
+
+Provided Dockerfile contains requirements for debian 9. it can be easily adapted for other distros.
+
+
+```bash
 docker-compose up -d
 docker exec -it php7xapian bash
 
-docker run -it -v ~/projects:/root/projects debian:testing
 
 apt-get update
 apt-get install -y --no-install-recommends php7.0-dev xzdec curl g++-6 uuid-dev make sudo
+```
+
 
 ## build xapian-core and make libxapian30 deb package
+
+if libxapian30 and libxapian-dev are available via apt, as for debian 9, skip this step.
 
 ```bash
 cd ~/projects
@@ -39,33 +48,29 @@ END
 
 (cd /tmp;dpkg-deb -b libxapian30)
 
-dpkg -i /tmp/libxapian30.deb
-#docker cp 4407da48e4d8:/tmp/libxapian30.deb /media/sd_D/hubiC/public/libxapian30-1.4.3_amd64_stretch.deb
+dpkg --contents /tmp/libxapian30.deb
+
+# dpkg -i /tmp/libxapian30.deb
+
 ```
 
 ## build bindings
 
 ```bash
-cd ~/projects
-curl http://oligarchy.co.uk/xapian/1.4.0/xapian-bindings-1.4.0.tar.xz|xzdec|tar -xf -
-cd xapian-bindings-1.4.0/
-./configure prefix=/usr --with-php
-"SWIG doesn't yet support PHP7"
 
 cd ~/projects/php7xapian
-git clone https://github.com/CopernicaMarketingSoftware/PHP-CPP.git 
+[ -f PHP-CPP/.git ] || git clone https://github.com/CopernicaMarketingSoftware/PHP-CPP.git 
 (cd PHP-CPP;make;make install)
 
 ln -s PHP-CPP/include phpcpp
 ln -s include PHP-CPP/phpcpp
 mkdir -p /etc/php/7.0/mods-available/
 
-#tweak Makefile
 
-make install && php -f test.php
+make install
 ```
 
-## build bindings deb package
+## build bindings debian package
 
 ```bash
 
@@ -94,12 +99,47 @@ END
 
 (cd /tmp;dpkg-deb -b php7.0-xapian)
 dpkg --contents /tmp/php7.0-xapian.deb
-dpkg -i /tmp/php7.0-xapian.deb
 
-#docker cp 4407da48e4d8:/tmp/php7.0-xapian.deb /media/sd_D/hubiC/public/php7.0-xapian-1.4.3_amd64_stretch.deb
+# dpkg -i /tmp/php7.0-xapian.deb
 ```
 
+##TODO
 
-
-(docker image is debian:testing, container is 4407da48e4d8 berserk_allen)
+implement methods for following classes
+- ExpandDecider
+- ExpandDeciderAnd
+- ExpandDeciderFilterTerms
+- ExpandDeciderFilterPrefix
+- LatLongCoordsIterator
+- LatLongCoords
+- LatLongMetric
+- GreatCircleMetric
+- KeyMaker
+- LatLongDistanceKeyMaker
+- MultiValueKeyMaker
+- PostingSource
+- LatLongDistancePostingSource
+- ValuePostingSource
+- ValueWeightPostingSource
+- DecreasingValueWeightPostingSource
+- ValueMapPostingSource
+- FixedWeightPostingSource
+- RangeProcessor
+- DateRangeProcessor
+- NumberRangeProcessor
+- ValueRangeProcessor
+- FieldProcessor
+- Registry
+- StemImplementation
+- Utf8Iterator
+- ValueSetMatchDecider
+- TfIdfWeight
+- InL2Weight
+- IfB2Weight
+- IneB2Weight
+- DLHWeight
+- PL2Weight
+- PL2PlusWeight
+- DPHWeight
+- LMWeight
 
