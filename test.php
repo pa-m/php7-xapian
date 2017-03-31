@@ -22,10 +22,12 @@ class MyMatchSpy extends XapianMatchSpy {
 	var $calls=0;
 	function __construct(){parent::__construct();}
 	function apply($doc,$wt){
+		//echo __METHOD__." ".$doc->get_value(0)."\n";
 		assertEquals("XapianDocument", get_class($doc),"check matchspy arg is a doc");
 		$this->calls++;
 	}
 }
+
 class MyMatchDecider extends XapianMatchDecider {
 	var $calls=0;
 	function __construct(){parent::__construct();}
@@ -80,6 +82,7 @@ for($pass=0;$pass<10;++$pass){
 	//echo "after set query\n";
 	assertEquals($query,$enquire->get_query(),"check enquire set/get query");
 	$matchSpy=new MyMatchSpy;
+	assertEquals(true,$matchSpy instanceof XapianMatchSpy,"check matchSpy instanceof XapianMatchSpy");
 	$enquire->add_matchspy($matchSpy);
 	$vcMatchSpy = new XapianValueCountMatchSpy(0);
 	assertEquals("XapianValueCountMatchSpy",get_class($vcMatchSpy),"check valueCountMatchSpy class");
@@ -92,6 +95,7 @@ for($pass=0;$pass<10;++$pass){
 	$enquire->set_sort_by_relevance_then_value(0,false);
 	$enquire->set_collapse_key(0,1);
 	$mset = $enquire->get_mset(0,1,1,null,$mdecider);
+	assertEquals(1,1,"get_mset passed");
 	assertEquals("XapianMSet",get_class($mset),"check get_mset returns a MSet");
 	assertEquals(1,$mset->size(),"check mset size");
 	assertEquals(1,$matchSpy->calls,"check matchSpy called");
